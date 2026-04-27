@@ -1,0 +1,942 @@
+{
+  "info": {
+    "name": "LeanStock API",
+    "_postman_id": "a5794f15-b949-4872-8e79-leanstock0001",
+    "description": "Postman collection for LeanStock Express + Prisma backend. Run requests from top to bottom: Health -> Register -> Login -> Me -> Locations -> Product -> Stock -> Transfer -> Overselling -> Refresh -> Logout.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:3000",
+      "type": "string"
+    },
+    {
+      "key": "password",
+      "value": "StrongPass1!",
+      "type": "string"
+    },
+    {
+      "key": "email",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "username",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "accessToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "refreshToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "locationAId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "locationBId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "productId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "codeA",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "codeB",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "sku",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "adminEmail",
+      "value": "admin@leanstock.local",
+      "type": "string"
+    },
+    {
+      "key": "adminPassword",
+      "value": "AdminPass1!",
+      "type": "string"
+    },
+    {
+      "key": "ordinaryUserEmail",
+      "value": "user@leanstock.local",
+      "type": "string"
+    },
+    {
+      "key": "ordinaryUserPassword",
+      "value": "UserPass1!",
+      "type": "string"
+    },
+    {
+      "key": "adminAccessToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "adminRefreshToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "ordinaryAccessToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "ordinaryRefreshToken",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "01 Health",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/health",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "health"
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('health is ok', () => {",
+              "  pm.response.to.have.status(200);",
+              "  pm.expect(pm.response.json().status).to.eql('ok');",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ]
+    },
+    {
+      "name": "02 Register",
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "exec": [
+              "const stamp = Date.now();",
+              "pm.collectionVariables.set('email', `owner${stamp}@example.com`);",
+              "pm.collectionVariables.set('username', `owner_${stamp}`);",
+              "pm.collectionVariables.set('codeA', `SHOP_A_${stamp}`);",
+              "pm.collectionVariables.set('codeB', `SHOP_B_${stamp}`);",
+              "pm.collectionVariables.set('sku', `MILK_${stamp}`);",
+              "pm.collectionVariables.unset('accessToken');",
+              "pm.collectionVariables.unset('refreshToken');",
+              "pm.collectionVariables.unset('locationAId');",
+              "pm.collectionVariables.unset('locationBId');",
+              "pm.collectionVariables.unset('productId');"
+            ],
+            "type": "text/javascript"
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('register created user', () => pm.response.to.have.status(201));",
+              "const json = pm.response.json();",
+              "pm.collectionVariables.set('accessToken', json.accessToken);",
+              "pm.collectionVariables.set('refreshToken', json.refreshToken);",
+              "pm.test('tokens exist', () => {",
+              "  pm.expect(json.accessToken).to.be.a('string').and.not.empty;",
+              "  pm.expect(json.refreshToken).to.be.a('string').and.not.empty;",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"tenantName\": \"Test Market\",\n  \"email\": \"{{email}}\",\n  \"username\": \"{{username}}\",\n  \"password\": \"{{password}}\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/auth/register",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "auth",
+            "register"
+          ]
+        }
+      }
+    },
+    {
+      "name": "03 Login",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('login ok', () => pm.response.to.have.status(200));",
+              "const json = pm.response.json();",
+              "pm.collectionVariables.set('accessToken', json.accessToken);",
+              "pm.collectionVariables.set('refreshToken', json.refreshToken);"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"{{email}}\",\n  \"password\": \"{{password}}\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/auth/login",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "auth",
+            "login"
+          ]
+        }
+      }
+    },
+    {
+      "name": "04 Me",
+      "request": {
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{accessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/auth/me",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "auth",
+            "me"
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('me ok', () => pm.response.to.have.status(200));",
+              "pm.test('same email', () => pm.expect(pm.response.json().user.email).to.eql(pm.collectionVariables.get('email')));"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ]
+    },
+    {
+      "name": "05 Create Location A",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('location A created', () => pm.response.to.have.status(201));",
+              "pm.collectionVariables.set('locationAId', pm.response.json().location.id);"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{accessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"Shop A\",\n  \"code\": \"{{codeA}}\",\n  \"address\": \"Abay Ave 10, Almaty\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/locations",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "locations"
+          ]
+        }
+      }
+    },
+    {
+      "name": "06 Create Location B",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('location B created', () => pm.response.to.have.status(201));",
+              "pm.collectionVariables.set('locationBId', pm.response.json().location.id);"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{accessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"Shop B\",\n  \"code\": \"{{codeB}}\",\n  \"address\": \"Satpayev St 44, Almaty\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/locations",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "locations"
+          ]
+        }
+      }
+    },
+    {
+      "name": "07 Create Product",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('product created', () => pm.response.to.have.status(201));",
+              "pm.collectionVariables.set('productId', pm.response.json().product.id);"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{accessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"sku\": \"{{sku}}\",\n  \"name\": \"Milk 1L\",\n  \"supplierName\": \"Dairy Supplier KZ\",\n  \"supplierCost\": 300,\n  \"basePrice\": 500,\n  \"decayPercent\": 10,\n  \"decayIntervalHours\": 72,\n  \"deadStockAfterDays\": 30,\n  \"minPricePercent\": 50\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/products",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "products"
+          ]
+        }
+      }
+    },
+    {
+      "name": "08 List Products",
+      "request": {
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{accessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/products?limit=20",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "products"
+          ],
+          "query": [
+            {
+              "key": "limit",
+              "value": "20"
+            }
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('products listed', () => pm.response.to.have.status(200));",
+              "pm.test('pageInfo exists', () => pm.expect(pm.response.json()).to.have.property('pageInfo'));"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ]
+    },
+    {
+      "name": "09 Set Stock At Location A",
+      "request": {
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{accessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"productId\": \"{{productId}}\",\n  \"locationId\": \"{{locationAId}}\",\n  \"quantity\": 10,\n  \"receivedAt\": \"2026-03-01T12:00:00.000Z\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/inventory/stock",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "inventory",
+            "stock"
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('stock set', () => pm.response.to.have.status(200));",
+              "pm.test('quantity is 10', () => pm.expect(pm.response.json().inventoryItem.quantity).to.eql(10));"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ]
+    },
+    {
+      "name": "10 Transfer A To B",
+      "request": {
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{accessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"productId\": \"{{productId}}\",\n  \"sourceLocationId\": \"{{locationAId}}\",\n  \"destinationLocationId\": \"{{locationBId}}\",\n  \"quantity\": 7\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/inventory/transfers",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "inventory",
+            "transfers"
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('transfer created', () => pm.response.to.have.status(201));",
+              "pm.test('quantity transferred is 7', () => pm.expect(pm.response.json().transfer.quantity).to.eql(7));"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ]
+    },
+    {
+      "name": "11 Overselling Should Fail 409",
+      "request": {
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{accessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"productId\": \"{{productId}}\",\n  \"sourceLocationId\": \"{{locationAId}}\",\n  \"destinationLocationId\": \"{{locationBId}}\",\n  \"quantity\": 100\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/inventory/transfers",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "inventory",
+            "transfers"
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('overselling blocked with 409', () => pm.response.to.have.status(409));"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ]
+    },
+    {
+      "name": "12 Dead Stock Decay Job",
+      "request": {
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{accessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"now\": \"2026-04-27T12:00:00.000Z\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/jobs/dead-stock-decay",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "jobs",
+            "dead-stock-decay"
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('decay job ok', () => pm.response.to.have.status(200));",
+              "pm.test('updatedCount exists', () => pm.expect(pm.response.json()).to.have.property('updatedCount'));"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ]
+    },
+    {
+      "name": "13 Refresh Access Token",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/auth/refresh",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "auth",
+            "refresh"
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('refresh ok', () => pm.response.to.have.status(200));",
+              "pm.collectionVariables.set('accessToken', pm.response.json().accessToken);"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ]
+    },
+    {
+      "name": "14 Logout",
+      "request": {
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{accessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/auth/logout",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "auth",
+            "logout"
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('logout ok', () => pm.response.to.have.status(200));",
+              "pm.test('token revoked', () => pm.expect(pm.response.json().revoked).to.eql(true));"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ]
+    },
+    {
+      "name": "15 Refresh After Logout Should Fail 401",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/auth/refresh",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "auth",
+            "refresh"
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('revoked refresh token rejected', () => pm.response.to.have.status(401));"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ]
+    },
+    {
+      "name": "16 Seeded Admin Login",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('admin login ok', () => pm.response.to.have.status(200));",
+              "const json = pm.response.json();",
+              "pm.collectionVariables.set('adminAccessToken', json.accessToken);",
+              "pm.collectionVariables.set('adminRefreshToken', json.refreshToken);",
+              "pm.test('role is ADMIN', () => pm.expect(json.user.role).to.eql('ADMIN'));"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"{{adminEmail}}\",\n  \"password\": \"{{adminPassword}}\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/auth/login",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "auth",
+            "login"
+          ]
+        }
+      }
+    },
+    {
+      "name": "17 Admin Audit Logs",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('admin can read audit logs', () => pm.response.to.have.status(200));",
+              "pm.test('data is array', () => pm.expect(pm.response.json().data).to.be.an('array'));"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{adminAccessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/admin/audit-logs",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "admin",
+            "audit-logs"
+          ]
+        }
+      }
+    },
+    {
+      "name": "18 Seeded Ordinary User Login",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('ordinary user login ok', () => pm.response.to.have.status(200));",
+              "const json = pm.response.json();",
+              "pm.collectionVariables.set('ordinaryAccessToken', json.accessToken);",
+              "pm.collectionVariables.set('ordinaryRefreshToken', json.refreshToken);",
+              "pm.test('role is STAFF', () => pm.expect(json.user.role).to.eql('STAFF'));"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"{{ordinaryUserEmail}}\",\n  \"password\": \"{{ordinaryUserPassword}}\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/auth/login",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "auth",
+            "login"
+          ]
+        }
+      }
+    },
+    {
+      "name": "19 Ordinary User Audit Logs Should Fail 403",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('ordinary user is forbidden from admin logs', () => pm.response.to.have.status(403));"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{ordinaryAccessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/admin/audit-logs",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "admin",
+            "audit-logs"
+          ]
+        }
+      }
+    }
+  ]
+}

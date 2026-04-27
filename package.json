@@ -8,6 +8,7 @@
     "start": "node src/server.js",
     "lint": "eslint .",
     "test": "jest --runInBand",
+    "seed": "node prisma/seed.js",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate deploy",
     "docker:build": "docker build -t leanstock-backend ."
