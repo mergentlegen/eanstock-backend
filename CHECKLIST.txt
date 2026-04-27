@@ -1,0 +1,15 @@
+[x] Auth endpoints implemented: register, login, refresh, logout, me
+[x] JWT access tokens expire and refresh tokens are persisted/revocable
+[x] Passwords are hashed with bcryptjs; plaintext is never stored
+[x] RBAC middleware returns 403 for authenticated users with the wrong role
+[x] Redis is used for auth rate limiting and inventory transfer locks
+[x] CORS uses configured origins; wildcard is rejected in production
+[x] Prisma 5 schema and baseline migration are included
+[x] Business queries include tenantId filtering for tenant isolation
+[x] Inventory transfer prevents overselling with Redis lock + serializable Prisma transaction
+[x] Dead-stock decay uses configurable decay settings
+[x] Cursor pagination is implemented on GET /products
+[x] Swagger UI is served at /docs from openapi.yaml
+[x] CI runs lint, tests, and Docker build
+[ ] I validated openapi.yaml in editor.swagger.io
+[ ] I ran SQL schema through syntax checker

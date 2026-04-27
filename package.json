@@ -1,0 +1,39 @@
+{
+  "name": "leanstock-backend",
+  "version": "0.1.0",
+  "description": "LeanStock production-grade backend milestone: Express, Prisma 5, PostgreSQL, Redis, JWT auth, RBAC, and inventory transactions.",
+  "main": "src/server.js",
+  "scripts": {
+    "dev": "nodemon src/server.js",
+    "start": "node src/server.js",
+    "lint": "eslint .",
+    "test": "jest --runInBand",
+    "prisma:generate": "prisma generate",
+    "prisma:migrate": "prisma migrate deploy",
+    "docker:build": "docker build -t leanstock-backend ."
+  },
+  "dependencies": {
+    "@prisma/client": "5.22.0",
+    "bcryptjs": "2.4.3",
+    "cors": "2.8.5",
+    "dotenv": "16.4.7",
+    "express": "^4.22.1",
+    "helmet": "8.0.0",
+    "ioredis": "5.4.2",
+    "jsonwebtoken": "9.0.2",
+    "swagger-ui-express": "5.0.1",
+    "yamljs": "0.3.0",
+    "zod": "3.24.1"
+  },
+  "devDependencies": {
+    "eslint": "^9.39.4",
+    "globals": "15.14.0",
+    "jest": "29.7.0",
+    "nodemon": "3.1.9",
+    "prisma": "5.22.0",
+    "supertest": "7.0.0"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}

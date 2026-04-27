@@ -1,0 +1,12 @@
+process.env.NODE_ENV = process.env.NODE_ENV || "test";
+process.env.PORT = process.env.PORT || "3000";
+process.env.DATABASE_URL = process.env.DATABASE_URL || "postgresql://leanstock:leanstock@localhost:5432/leanstock?schema=public";
+process.env.REDIS_URL = process.env.REDIS_URL || "redis://localhost:6379";
+process.env.JWT_ACCESS_SECRET = process.env.JWT_ACCESS_SECRET || "test-access-secret-at-least-32-characters";
+process.env.JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET || "test-refresh-secret-at-least-32-characters";
+process.env.ACCESS_TOKEN_TTL_SECONDS = process.env.ACCESS_TOKEN_TTL_SECONDS || "900";
+process.env.REFRESH_TOKEN_TTL_DAYS = process.env.REFRESH_TOKEN_TTL_DAYS || "14";
+process.env.CORS_ORIGINS = process.env.CORS_ORIGINS || "http://localhost:5173";
+process.env.AUTH_RATE_LIMIT_POINTS = process.env.AUTH_RATE_LIMIT_POINTS || "50";
+process.env.AUTH_RATE_LIMIT_WINDOW_SECONDS = process.env.AUTH_RATE_LIMIT_WINDOW_SECONDS || "60";
+process.env.TRANSFER_LOCK_TTL_MS = process.env.TRANSFER_LOCK_TTL_MS || "8000";
