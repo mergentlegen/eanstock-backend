@@ -33,6 +33,7 @@ GET http://localhost:3000/health
 - Auth: register, login, refresh, logout, `/auth/me`.
 - Security: bcrypt password hashing, JWT access tokens, persisted refresh tokens with revocation, RBAC middleware, Redis-backed auth rate limiting.
 - LeanStock core: tenant-scoped locations, products, stock adjustment, atomic transfer, dead-stock decay job.
+- Background jobs: dead-stock decay is scheduled by `node-cron` and can also be triggered manually for defense demos.
 - Multi-tenancy: business tables include `tenantId`; every product/location/inventory query filters by authenticated user tenant.
 - API docs: OpenAPI 3 contract served at `/docs`.
 - Tests: unit tests for decay math, auth integration tests, inventory transaction integration test.
@@ -43,7 +44,7 @@ Express.js was chosen because the Week 1 backend track is Node.js, and Prisma 5 
 
 The inventory transfer endpoint does not use raw `SELECT FOR UPDATE` because the assignment bans raw SQL queries. Instead, it uses:
 
-- Redis lock keys per `tenantId + productId + locationId` to serialize competing transfers.
+- Redis Redlock keys per `tenantId + productId + locationId` to serialize competing transfers.
 - Prisma `$transaction` with `Serializable` isolation.
 - Atomic `updateMany` conditional decrement: source stock is decremented only when `quantity >= requestedQuantity`.
 

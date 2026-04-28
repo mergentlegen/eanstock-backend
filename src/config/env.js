@@ -16,6 +16,8 @@ const envSchema = z.object({
   AUTH_RATE_LIMIT_POINTS: z.coerce.number().int().positive().default(5),
   AUTH_RATE_LIMIT_WINDOW_SECONDS: z.coerce.number().int().positive().default(60),
   TRANSFER_LOCK_TTL_MS: z.coerce.number().int().positive().default(8000),
+  ENABLE_DEAD_STOCK_WORKER: z.coerce.boolean().default(true),
+  DEAD_STOCK_DECAY_CRON: z.string().min(5).default("0 * * * *"),
 });
 
 const parsed = envSchema.safeParse(process.env);

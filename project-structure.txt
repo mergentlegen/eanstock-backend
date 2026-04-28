@@ -25,16 +25,20 @@ leanstock-backend/
 │   ├── services/                # Business logic and integrations
 │   │   ├── audit.service.js     # Append-only audit log writer
 │   │   ├── auth.service.js      # Auth workflows
+│   │   ├── deadStockWorker.service.js # Cron worker for automatic price decay
 │   │   ├── inventory.service.js # Tenant catalog, transfer, decay logic
-│   │   ├── lock.service.js      # Redis lock for transfer concurrency
+│   │   ├── lock.service.js      # Redis Redlock for transfer concurrency
 │   │   └── token.service.js     # JWT and refresh token management
 │   └── utils/                   # Shared helpers
 │       ├── asyncHandler.js      # Async route wrapper
 │       ├── errors.js            # ApiError helpers
 │       └── slug.js              # Tenant slug helper
 ├── prisma/                      # Prisma ORM source of truth
+│   ├── seed.js                  # Demo ADMIN and STAFF users
 │   ├── schema.prisma            # Models, enums, indexes, relations
 │   └── migrations/              # Baseline PostgreSQL migration
+├── postman/                     # Defense-ready Postman collection
+│   └── LeanStock_API.postman_collection.json # Auth, admin, and business flow
 ├── tests/                       # Jest unit and integration tests
 │   ├── auth.integration.test.js # Auth flow and RBAC tests
 │   ├── deadStock.test.js        # Pure dead-stock formula tests

@@ -193,9 +193,17 @@ async function transferInventory(user, input) {
 }
 
 async function applyDeadStockDecay(user, now = new Date()) {
+  return applyDeadStockDecayForTenant({
+    tenantId: user.tenantId,
+    actorUserId: user.id,
+    now,
+  });
+}
+
+async function applyDeadStockDecayForTenant({ tenantId, actorUserId = null, now = new Date() }) {
   const inventoryRows = await prisma.inventoryItem.findMany({
     where: {
-      tenantId: user.tenantId,
+      tenantId,
       quantity: { gt: 0 },
     },
     include: {
@@ -229,7 +237,7 @@ async function applyDeadStockDecay(user, now = new Date()) {
     const product = await prisma.product.update({
       where: {
         id: row.productId,
-        tenantId: user.tenantId,
+        tenantId,
       },
       data: {
         currentPrice: new Prisma.Decimal(decision.nextPrice),
@@ -238,7 +246,7 @@ async function applyDeadStockDecay(user, now = new Date()) {
 
     await prisma.inventoryItem.updateMany({
       where: {
-        tenantId: user.tenantId,
+        tenantId,
         productId: row.productId,
       },
       data: {
@@ -248,8 +256,8 @@ async function applyDeadStockDecay(user, now = new Date()) {
     });
 
     await writeAudit({
-      tenantId: user.tenantId,
-      actorUserId: user.id,
+      tenantId,
+      actorUserId,
       action: "DEAD_STOCK_DECAY_APPLIED",
       entityType: "Product",
       entityId: product.id,
@@ -328,5 +336,6 @@ module.exports = {
   setInventoryStock,
   transferInventory,
   applyDeadStockDecay,
+  applyDeadStockDecayForTenant,
   calculateDeadStockPrice,
 };

@@ -34,8 +34,8 @@ jobs:
       NODE_ENV: test
       DATABASE_URL: postgresql://leanstock:leanstock@localhost:5432/leanstock?schema=public
       REDIS_URL: redis://localhost:6379
-      JWT_ACCESS_SECRET: ci-access-secret-at-least-32-characters
-      JWT_REFRESH_SECRET: ci-refresh-secret-at-least-32-characters
+      JWT_ACCESS_SECRET: 2UhLjRw1PkOotPZE9mvIQDlPMfrd7kOvh4Dp0crbNN2qLxY8djxpCMgb50Ha5BHc
+      JWT_REFRESH_SECRET: KYAU2w5+XzMCBuNLBtPC2MUFXEKXMzvJXWZr+NkehgXMXoB0j8F4zFwcHDoEzAX3
       CORS_ORIGINS: http://localhost:5173
     steps:
       - uses: actions/checkout@v4

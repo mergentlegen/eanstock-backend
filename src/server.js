@@ -2,16 +2,19 @@ const { env } = require("./config/env");
 const { createApp } = require("./app");
 const { connectRedis, disconnectRedis } = require("./config/redis");
 const { disconnectPrisma } = require("./config/database");
+const { startDeadStockWorker, stopDeadStockWorker } = require("./services/deadStockWorker.service");
 
 async function main() {
   await connectRedis();
   const app = createApp();
+  startDeadStockWorker();
   const server = app.listen(env.PORT, () => {
     console.log(`LeanStock API listening on port ${env.PORT}`);
     console.log(`Swagger UI: http://localhost:${env.PORT}/docs`);
   });
 
   async function shutdown() {
+    stopDeadStockWorker();
     server.close(async () => {
       await Promise.all([disconnectRedis(), disconnectPrisma()]);
       process.exit(0);

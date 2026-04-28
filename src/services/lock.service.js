@@ -1,12 +1,28 @@
 const crypto = require("crypto");
+const { default: Redlock } = require("redlock");
 const { redis } = require("../config/redis");
 const { env } = require("../config/env");
 const { conflict } = require("../utils/errors");
 
 const memoryLocks = new Map();
+const redlock = new Redlock([redis], {
+  driftFactor: 0.01,
+  retryCount: 0,
+});
 
 async function withRedisLock(keys, fn) {
   const orderedKeys = [...new Set(keys)].sort();
+  if (!(process.env.NODE_ENV === "test" && redis.status !== "ready")) {
+    try {
+      return await redlock.using(orderedKeys, env.TRANSFER_LOCK_TTL_MS, async () => fn());
+    } catch (error) {
+      if (error.name === "ExecutionError" || error.name === "ResourceLockedError") {
+        throw conflict("Inventory rows are locked by another transfer. Retry shortly.", { lockKeys: orderedKeys });
+      }
+      throw error;
+    }
+  }
+
   const tokens = [];
 
   try {
