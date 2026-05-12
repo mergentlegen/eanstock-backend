@@ -697,6 +697,87 @@ paths:
         "409": { $ref: "#/components/responses/Conflict" }
         "422": { $ref: "#/components/responses/ValidationError" }
         "500": { $ref: "#/components/responses/ServerError" }
+  /admin/users:
+    get:
+      tags: [Admin]
+      summary: List registered users, admin-only
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: cursor
+          schema: { type: string, format: uuid }
+        - in: query
+          name: limit
+          schema: { type: integer, default: 25, maximum: 100 }
+      responses:
+        "200":
+          description: Tenant users
+          content:
+            application/json:
+              schema: { type: object }
+              example:
+                data:
+                  - id: 3fa85f64-5717-4562-b3fc-2c963f66afa6
+                    email: staff@leanstock.local
+                    username: staff_user
+                    role: STAFF
+                    emailVerifiedAt: "2026-05-12T09:00:00.000Z"
+                    isActive: true
+                pageInfo:
+                  hasNextPage: false
+                  nextCursor: null
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+        "500": { $ref: "#/components/responses/ServerError" }
+  /admin/users/{userId}/role:
+    patch:
+      tags: [Admin]
+      summary: Change a tenant user role, admin-only
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: userId
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [role]
+              properties:
+                role:
+                  type: string
+                  enum: [ADMIN, MERCHANT, STAFF]
+            example:
+              role: STAFF
+      responses:
+        "200":
+          description: User role updated
+          content:
+            application/json:
+              schema: { type: object }
+              example:
+                user:
+                  id: 3fa85f64-5717-4562-b3fc-2c963f66afa6
+                  email: staff@leanstock.local
+                  username: staff_user
+                  role: ADMIN
+                  isActive: true
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+        "500": { $ref: "#/components/responses/ServerError" }
   /admin/audit-logs:
     get:
       tags: [Admin]

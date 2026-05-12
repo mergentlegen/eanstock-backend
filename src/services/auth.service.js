@@ -68,12 +68,12 @@ async function registerUser(input, ipAddress) {
     };
   });
 
-  const verifyUrl = `${env.APP_BASE_URL}/auth/verify-email?token=${encodeURIComponent(result.verification.token)}`;
+  const verifyUrl = `${env.APP_BASE_URL}/?verifyToken=${encodeURIComponent(result.verification.token)}`;
   await queueEmail({
     to: result.user.email,
     subject: "Verify your LeanStock account",
-    text: `Welcome to LeanStock. Verify your account here: ${verifyUrl}`,
-    html: `<p>Welcome to LeanStock.</p><p><a href="${verifyUrl}">Verify your account</a></p>`,
+    text: `Welcome to LeanStock. Verify your account here: ${verifyUrl}\n\nVerification token: ${result.verification.token}`,
+    html: `<p>Welcome to LeanStock.</p><p><a href="${verifyUrl}">Verify your account</a></p><p>Verification token: <code>${result.verification.token}</code></p>`,
     eventType: "EMAIL_VERIFICATION",
     metadata: { userId: result.user.id, tenantId: result.tenant.id },
   });
@@ -187,6 +187,8 @@ async function verifyEmail(rawToken, ipAddress) {
     throw badRequest("Verification token is invalid or expired");
   }
 
+  const refresh = await issueRefreshToken(consumed.id);
+
   await queueEmail({
     to: consumed.email,
     subject: "LeanStock account verified",
@@ -196,7 +198,13 @@ async function verifyEmail(rawToken, ipAddress) {
     metadata: { userId: consumed.id, tenantId: consumed.tenantId },
   });
 
-  return { user: publicUser(consumed), verified: true };
+  return {
+    user: publicUser(consumed),
+    accessToken: signAccessToken(consumed),
+    refreshToken: refresh.refreshToken,
+    refreshTokenExpiresAt: refresh.expiresAt,
+    verified: true,
+  };
 }
 
 async function requestPasswordReset(email, ipAddress) {
@@ -210,7 +218,7 @@ async function requestPasswordReset(email, ipAddress) {
     purpose: "PASSWORD_RESET",
     ttlMinutes: env.PASSWORD_RESET_TTL_MINUTES,
   });
-  const resetUrl = `${env.APP_BASE_URL}/reset-password?token=${encodeURIComponent(reset.token)}`;
+  const resetUrl = `${env.APP_BASE_URL}/?resetToken=${encodeURIComponent(reset.token)}`;
 
   await writeAudit({
     tenantId: user.tenantId,

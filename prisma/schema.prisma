@@ -36,6 +36,7 @@ enum AuditAction {
   SALE_RECORDED
   REORDER_FORECAST_VIEWED
   DEAD_STOCK_DECAY_APPLIED
+  USER_ROLE_CHANGED
 }
 
 enum EmailTokenPurpose {

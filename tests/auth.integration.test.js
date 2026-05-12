@@ -1,4 +1,5 @@
 const request = require("supertest");
+const bcrypt = require("bcryptjs");
 const { createApp } = require("../src/app");
 const { prisma } = require("../src/config/database");
 
@@ -101,5 +102,56 @@ describe("authentication and RBAC", () => {
       .set("Authorization", `Bearer ${login.body.accessToken}`)
       .send({ name: "Main Store", code: "MAIN" })
       .expect(403);
+  });
+
+  test("admin can list tenant users and change roles", async () => {
+    const tenant = await prisma.tenant.create({
+      data: {
+        name: "Demo Market",
+        slug: "demo-market-test",
+      },
+    });
+    const passwordHash = await bcrypt.hash("AdminPass1!", 12);
+    const admin = await prisma.user.create({
+      data: {
+        tenantId: tenant.id,
+        email: "admin@example.com",
+        username: "admin_user",
+        passwordHash,
+        role: "ADMIN",
+        emailVerifiedAt: new Date(),
+      },
+    });
+    const staff = await prisma.user.create({
+      data: {
+        tenantId: tenant.id,
+        email: "staff@example.com",
+        username: "staff_user",
+        passwordHash,
+        role: "STAFF",
+        emailVerifiedAt: new Date(),
+      },
+    });
+
+    const login = await request(app)
+      .post("/auth/login")
+      .send({ email: admin.email, password: "AdminPass1!" })
+      .expect(200);
+
+    const listed = await request(app)
+      .get("/admin/users")
+      .set("Authorization", `Bearer ${login.body.accessToken}`)
+      .expect(200);
+
+    expect(listed.body.data).toHaveLength(2);
+
+    await request(app)
+      .patch(`/admin/users/${staff.id}/role`)
+      .set("Authorization", `Bearer ${login.body.accessToken}`)
+      .send({ role: "ADMIN" })
+      .expect(200);
+
+    const updated = await prisma.user.findUnique({ where: { id: staff.id } });
+    expect(updated.role).toBe("ADMIN");
   });
 });

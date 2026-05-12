@@ -14,6 +14,7 @@ RUN apt-get update \
   && rm -rf /var/lib/apt/lists/*
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
+RUN npm run build:client
 RUN npx prisma generate
 EXPOSE 3000
 CMD ["sh", "-c", "npx prisma migrate deploy && node src/server.js"]

@@ -21,7 +21,8 @@
     { "key": "reservationToken", "value": "" },
     { "key": "adminEmail", "value": "admin@leanstock.local" },
     { "key": "adminPassword", "value": "AdminPass1!" },
-    { "key": "adminAccessToken", "value": "" }
+    { "key": "adminAccessToken", "value": "" },
+    { "key": "roleUserId", "value": "" }
   ],
   "item": [
     {
@@ -197,15 +198,34 @@
       }
     },
     {
-      "name": "19 Admin Audit Logs",
+      "name": "19 Admin List Users",
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+        "const users = pm.response.json().data || [];",
+        "const target = users.find((user) => user.role !== 'ADMIN') || users[0];",
+        "if (target) pm.collectionVariables.set('roleUserId', target.id);"
+      ] } }],
+      "request": { "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{adminAccessToken}}", "type": "string" }] }, "method": "GET", "url": "{{baseUrl}}/admin/users?limit=20" }
+    },
+    {
+      "name": "20 Admin Change User Role",
+      "request": {
+        "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{adminAccessToken}}", "type": "string" }] },
+        "method": "PATCH",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": { "mode": "raw", "raw": "{\n  \"role\": \"STAFF\"\n}" },
+        "url": "{{baseUrl}}/admin/users/{{roleUserId}}/role"
+      }
+    },
+    {
+      "name": "21 Admin Audit Logs",
       "request": { "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{adminAccessToken}}", "type": "string" }] }, "method": "GET", "url": "{{baseUrl}}/admin/audit-logs?limit=20" }
     },
     {
-      "name": "20 Admin Queue Visibility",
+      "name": "22 Admin Queue Visibility",
       "request": { "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{adminAccessToken}}", "type": "string" }] }, "method": "GET", "url": "{{baseUrl}}/admin/jobs" }
     },
     {
-      "name": "21 Refresh Token Rotation",
+      "name": "23 Refresh Token Rotation",
       "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
         "const json = pm.response.json();",
         "pm.collectionVariables.set('accessToken', json.accessToken);",
@@ -219,7 +239,7 @@
       }
     },
     {
-      "name": "22 Logout",
+      "name": "24 Logout",
       "request": {
         "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessToken}}", "type": "string" }] },
         "method": "POST",

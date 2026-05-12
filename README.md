@@ -28,6 +28,12 @@ Minimal browser demo:
 http://localhost:3000
 ```
 
+React frontend source:
+
+```text
+frontend/
+```
+
 Health check:
 
 ```text
@@ -62,6 +68,7 @@ That combination prevents overselling while staying inside Prisma ORM.
 
 ```bash
 npm install
+npm run build:client
 npx prisma generate
 npx prisma migrate deploy
 npm run dev
@@ -93,25 +100,37 @@ user@leanstock.local  / UserPass1!   role STAFF
 
 ## Email
 
-Local mode logs email contents to API logs:
+Local mode logs email contents to API logs. This is useful without real SMTP credentials, but it will not deliver to an inbox:
 
 ```env
 EMAIL_DRIVER=log
 ```
 
-Real SMTP mode for pre-defense:
+Real Gmail SMTP mode for pre-defense. You must use a Gmail App Password, not your normal Gmail password:
 
 ```env
 EMAIL_DRIVER=smtp
-SMTP_HOST=smtp.your-provider.com
+SMTP_HOST=smtp.gmail.com
 SMTP_PORT=587
 SMTP_SECURE=false
-SMTP_USER=your-user
-SMTP_PASS=your-password
-EMAIL_FROM=LeanStock <no-reply@yourdomain.com>
+SMTP_USER=your-real-gmail@gmail.com
+SMTP_PASS=your-16-character-gmail-app-password
+EMAIL_FROM=LeanStock <your-real-gmail@gmail.com>
 ```
 
 Email sending is asynchronous: API endpoints enqueue jobs into Redis/BullMQ, and the email worker sends them.
+
+After changing SMTP variables, restart the API:
+
+```bash
+docker compose up -d --build api
+```
+
+To inspect local log-mode emails:
+
+```bash
+docker compose logs -f api
+```
 
 ## Defense Flow
 
