@@ -3,6 +3,7 @@ const {
   loginUser,
   refreshAccessToken,
   logoutUser,
+  deleteOwnAccount,
   verifyEmail,
   requestPasswordReset,
   confirmPasswordReset,
@@ -45,6 +46,11 @@ async function me(req, res) {
   res.json({ user: publicUser(req.user) });
 }
 
+async function deleteMe(req, res) {
+  const result = await deleteOwnAccount(req.user, req.ip);
+  res.json(result);
+}
+
 async function verifyEmailHandler(req, res) {
   const token = req.body?.token ?? req.query?.token;
   const result = await verifyEmail(token, req.ip);
@@ -67,6 +73,7 @@ module.exports = {
   refresh,
   logout,
   me,
+  deleteMe,
   verifyEmailHandler,
   requestPasswordResetHandler,
   confirmPasswordResetHandler,

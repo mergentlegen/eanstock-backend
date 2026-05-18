@@ -10,6 +10,25 @@ function startWorkers() {
     return sendEmailNow(job.data);
   }, { connection: createQueueConnection(), concurrency: 5 });
 
+  emailWorker.on("completed", (job) => {
+    console.log("[email:sent]", {
+      jobId: job.id,
+      to: job.data.to,
+      subject: job.data.subject,
+      eventType: job.data.eventType,
+    });
+  });
+
+  emailWorker.on("failed", (job, error) => {
+    console.error("[email:failed]", {
+      jobId: job?.id,
+      to: job?.data?.to,
+      subject: job?.data?.subject,
+      eventType: job?.data?.eventType,
+      message: error.message,
+    });
+  });
+
   const maintenanceWorker = new Worker("maintenance", async (job) => {
     if (job.name === "dead-stock-decay") {
       return applyDeadStockDecayForTenant({

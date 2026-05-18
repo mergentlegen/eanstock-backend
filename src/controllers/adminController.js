@@ -1,6 +1,7 @@
 const { prisma } = require("../config/database");
 const { notFound, badRequest } = require("../utils/errors");
 const { writeAudit } = require("../services/audit.service");
+const { queueEmail } = require("../services/email.service");
 
 async function listUsers(req, res) {
   const limit = Math.min(Number(req.query.limit || 25), 100);
@@ -92,6 +93,48 @@ async function updateUserRole(req, res) {
   res.json({ user: result });
 }
 
+async function deleteUser(req, res) {
+  const { userId } = req.params;
+
+  if (userId === req.user.id) {
+    throw badRequest("Use account deletion from Account page to delete your own user");
+  }
+
+  const result = await prisma.$transaction(async (tx) => {
+    const target = await tx.user.findUnique({
+      where: { id: userId },
+    });
+    if (!target) {
+      throw notFound("User was not found");
+    }
+
+    const tenantUserCount = await tx.user.count({
+      where: { tenantId: target.tenantId },
+    });
+
+    await writeAudit({
+      tx,
+      tenantId: target.tenantId,
+      actorUserId: req.user.id,
+      action: "USER_DELETED",
+      entityType: "User",
+      entityId: userId,
+      metadata: { email: target.email, role: target.role },
+      ipAddress: req.ip,
+    });
+
+    if (tenantUserCount <= 1) {
+      await tx.tenant.delete({ where: { id: target.tenantId } });
+      return { deleted: true, tenantDeleted: true, id: userId };
+    }
+
+    await tx.user.delete({ where: { id: userId } });
+    return { deleted: true, tenantDeleted: false, id: userId };
+  });
+
+  res.json(result);
+}
+
 async function listAuditLogs(req, res) {
   const limit = Math.min(Number(req.query.limit || 50), 100);
   const logs = await prisma.auditLog.findMany({
@@ -120,4 +163,24 @@ async function getJobQueues(req, res) {
   res.json({ email, maintenance });
 }
 
-module.exports = { listUsers, updateUserRole, listAuditLogs, getJobQueues };
+async function sendTestEmail(req, res) {
+  const job = await queueEmail({
+    to: req.body.to,
+    subject: "LeanStock SMTP test",
+    text: "If you received this email, LeanStock SMTP delivery is working.",
+    html: "<p>If you received this email, LeanStock SMTP delivery is working.</p>",
+    eventType: "SMTP_TEST",
+    metadata: {
+      requestedByUserId: req.user.id,
+      tenantId: req.user.tenantId,
+    },
+  });
+
+  res.status(202).json({
+    queued: true,
+    jobId: job.id,
+    to: req.body.to,
+  });
+}
+
+module.exports = { listUsers, updateUserRole, deleteUser, listAuditLogs, getJobQueues, sendTestEmail };

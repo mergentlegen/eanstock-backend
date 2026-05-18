@@ -48,6 +48,8 @@ export default function App() {
   const [products, setProducts] = useState([]);
   const [users, setUsers] = useState([]);
   const [reservationToken, setReservationToken] = useState("");
+  const [editingLocationId, setEditingLocationId] = useState("");
+  const [editingProductId, setEditingProductId] = useState("");
 
   const [locationForm, setLocationForm] = useState({
     name: "Main Store",
@@ -104,6 +106,13 @@ export default function App() {
       listUsers();
     }
   }, [section, isAdmin]);
+
+  useEffect(() => {
+    if (isLoggedIn && section === "inventory") {
+      refreshLocations();
+      refreshProducts();
+    }
+  }, [isLoggedIn, section]);
 
   function notify(type, title, text) {
     setNotice({ type, title, text });
@@ -270,29 +279,93 @@ export default function App() {
     setScreen("login");
   }
 
-  async function createLocation(event) {
+  async function refreshLocations() {
+    const data = await request("/locations?limit=50", { auth: true }, "Locations loaded");
+    setLocations(data.data || []);
+  }
+
+  async function refreshProducts() {
+    const data = await request("/products?limit=50", { auth: true }, "Products loaded");
+    setProducts(data.data || []);
+  }
+
+  function editLocation(location) {
+    setEditingLocationId(location.id);
+    setLocationForm({
+      name: location.name,
+      code: location.code,
+      address: location.address || "",
+    });
+  }
+
+  function resetLocationForm() {
+    setEditingLocationId("");
+    setLocationForm({ name: "Main Store", code: `MAIN-${Date.now().toString(36).slice(-4).toUpperCase()}`, address: "Main street 10" });
+  }
+
+  async function saveLocation(event) {
     event.preventDefault();
-    const data = await request("/locations", {
-      method: "POST",
+    const path = editingLocationId ? `/locations/${editingLocationId}` : "/locations";
+    const data = await request(path, {
+      method: editingLocationId ? "PATCH" : "POST",
       auth: true,
       body: locationForm,
-    }, "Location created");
-    const next = [...locations, data.location];
-    setLocations(next);
-    if (next.length === 1) {
+    }, editingLocationId ? "Location updated" : "Location created");
+
+    await refreshLocations();
+    if (!editingLocationId && locations.length === 0) {
       setStockForm((current) => ({ ...current, locationId: data.location.id }));
       setTransferForm((current) => ({ ...current, sourceLocationId: data.location.id }));
     }
-    if (next.length === 2) {
+    if (!editingLocationId && locations.length === 1) {
       setTransferForm((current) => ({ ...current, destinationLocationId: data.location.id }));
     }
-    setLocationForm((current) => ({ ...current, code: `${current.code}-${next.length + 1}` }));
+    resetLocationForm();
   }
 
-  async function createProduct(event) {
+  async function deleteLocation(locationId) {
+    if (!window.confirm("Delete this location?")) return;
+    await request(`/locations/${locationId}`, { method: "DELETE", auth: true }, "Location deleted");
+    await refreshLocations();
+  }
+
+  function editProduct(product) {
+    setEditingProductId(product.id);
+    setProductForm({
+      sku: product.sku,
+      name: product.name,
+      supplierName: product.supplierName || "",
+      supplierCost: String(product.supplierCost),
+      basePrice: String(product.basePrice),
+      currentPrice: String(product.currentPrice),
+      deadStockAfterDays: String(product.deadStockAfterDays),
+      decayPercent: String(product.decayPercent),
+      decayIntervalHours: String(product.decayIntervalHours),
+      minPricePercent: String(product.minPricePercent),
+    });
+  }
+
+  function resetProductForm() {
+    setEditingProductId("");
+    setProductForm({
+      sku: `SKU-${Date.now()}`,
+      name: "Winter Jacket",
+      supplierName: "Almaty Textile",
+      supplierCost: "9000",
+      basePrice: "15000",
+      currentPrice: "15000",
+      deadStockAfterDays: "30",
+      decayPercent: "10",
+      decayIntervalHours: "72",
+      minPricePercent: "50",
+    });
+  }
+
+  async function saveProduct(event) {
     event.preventDefault();
-    const data = await request("/products", {
-      method: "POST",
+    const path = editingProductId ? `/products/${editingProductId}` : "/products";
+    const data = await request(path, {
+      method: editingProductId ? "PATCH" : "POST",
       auth: true,
       body: {
         ...productForm,
@@ -304,12 +377,17 @@ export default function App() {
         decayIntervalHours: Number(productForm.decayIntervalHours),
         minPricePercent: Number(productForm.minPricePercent),
       },
-    }, "Product created");
-    const next = [...products, data.product];
-    setProducts(next);
+    }, editingProductId ? "Product updated" : "Product created");
+    await refreshProducts();
     setStockForm((current) => ({ ...current, productId: data.product.id }));
     setTransferForm((current) => ({ ...current, productId: data.product.id }));
-    setProductForm((current) => ({ ...current, sku: `SKU-${Date.now()}` }));
+    resetProductForm();
+  }
+
+  async function deleteProduct(productId) {
+    if (!window.confirm("Delete this product?")) return;
+    await request(`/products/${productId}`, { method: "DELETE", auth: true }, "Product deleted");
+    await refreshProducts();
   }
 
   async function setStock(event) {
@@ -367,6 +445,19 @@ export default function App() {
     await listUsers();
   }
 
+  async function deleteUser(userId) {
+    if (!window.confirm("Delete this user account?")) return;
+    await request(`/admin/users/${userId}`, { method: "DELETE", auth: true }, "User deleted");
+    await listUsers();
+  }
+
+  async function deleteMyAccount() {
+    if (!window.confirm("Delete your account? This cannot be undone.")) return;
+    await request("/auth/me", { method: "DELETE", auth: true }, "Account deleted");
+    clearSession();
+    notify("success", "Account deleted", "Your account and empty tenant data were removed.");
+  }
+
   if (!isLoggedIn) {
     return (
       <main className="landing">
@@ -416,6 +507,7 @@ export default function App() {
           {screen === "reset" && (
             <form onSubmit={requestReset}>
               <h2>Reset password</h2>
+              <p className="muted">Reset email is sent only if this email is already registered.</p>
               <label>Email<input required type="email" value={resetForm.email} onChange={(event) => setResetForm({ ...resetForm, email: event.target.value })} /></label>
               <button type="submit" disabled={loading}>Send reset email</button>
               <label>Reset code<input value={resetForm.token} onChange={(event) => setResetForm({ ...resetForm, token: event.target.value })} /></label>
@@ -460,16 +552,19 @@ export default function App() {
 
         {section === "inventory" && (
           <div className="dashboardGrid">
-            <form className="card" onSubmit={createLocation}>
-              <h2>Create location</h2>
+            <form className="card" onSubmit={saveLocation}>
+              <h2>{editingLocationId ? "Edit location" : "Create location"}</h2>
               <label>Name<input value={locationForm.name} onChange={(event) => setLocationForm({ ...locationForm, name: event.target.value })} /></label>
               <label>Code<input value={locationForm.code} onChange={(event) => setLocationForm({ ...locationForm, code: event.target.value.toUpperCase() })} /></label>
               <label>Address<input value={locationForm.address} onChange={(event) => setLocationForm({ ...locationForm, address: event.target.value })} /></label>
-              <button type="submit" disabled={loading || !canManageInventory}>Create location</button>
+              <div className="inlineActions">
+                <button type="submit" disabled={loading || !canManageInventory}>{editingLocationId ? "Save location" : "Create location"}</button>
+                {editingLocationId && <button className="secondary" type="button" onClick={resetLocationForm}>Cancel edit</button>}
+              </div>
             </form>
 
-            <form className="card" onSubmit={createProduct}>
-              <h2>Create product</h2>
+            <form className="card" onSubmit={saveProduct}>
+              <h2>{editingProductId ? "Edit product" : "Create product"}</h2>
               <div className="twoCols">
                 <label>SKU<input value={productForm.sku} onChange={(event) => setProductForm({ ...productForm, sku: event.target.value })} /></label>
                 <label>Name<input value={productForm.name} onChange={(event) => setProductForm({ ...productForm, name: event.target.value })} /></label>
@@ -478,7 +573,10 @@ export default function App() {
                 <label>Base price<input type="number" value={productForm.basePrice} onChange={(event) => setProductForm({ ...productForm, basePrice: event.target.value })} /></label>
                 <label>Current price<input type="number" value={productForm.currentPrice} onChange={(event) => setProductForm({ ...productForm, currentPrice: event.target.value })} /></label>
               </div>
-              <button type="submit" disabled={loading || !canManageInventory}>Create product</button>
+              <div className="inlineActions">
+                <button type="submit" disabled={loading || !canManageInventory}>{editingProductId ? "Save product" : "Create product"}</button>
+                {editingProductId && <button className="secondary" type="button" onClick={resetProductForm}>Cancel edit</button>}
+              </div>
             </form>
 
             <form className="card" onSubmit={setStock}>
@@ -500,16 +598,17 @@ export default function App() {
 
             <div className="card">
               <h2>Quick operations</h2>
+              <button className="secondary" type="button" disabled={loading} onClick={refreshLocations}>Refresh locations</button>
+              <button className="secondary" type="button" disabled={loading} onClick={refreshProducts}>Refresh products</button>
               <button type="button" disabled={loading || !transferForm.productId || !transferForm.destinationLocationId} onClick={reserveStock}>Reserve one item</button>
               <button className="secondary" type="button" disabled={loading || !reservationToken} onClick={() => request(`/inventory/reservations/${reservationToken}/commit`, { method: "POST", auth: true }, "Reservation committed")}>Commit reservation</button>
               <button className="secondary" type="button" disabled={loading} onClick={() => request("/jobs/dead-stock-decay", { method: "POST", auth: true, body: {} }, "Dead stock job executed")}>Run dead-stock decay</button>
-              <button className="secondary" type="button" disabled={loading} onClick={() => request("/products", { auth: true }, "Products loaded")}>Refresh products</button>
             </div>
 
             <div className="card listCard">
               <h2>Current session data</h2>
-              <DataList title="Locations" items={locations} />
-              <DataList title="Products" items={products} />
+              <DataList title="Locations" items={locations} onEdit={editLocation} onDelete={deleteLocation} />
+              <DataList title="Products" items={products} onEdit={editProduct} onDelete={deleteProduct} />
               {reservationToken && <p className="muted">Reservation: {reservationToken}</p>}
             </div>
           </div>
@@ -536,6 +635,7 @@ export default function App() {
                     <option value="MERCHANT">MERCHANT</option>
                     <option value="STAFF">STAFF</option>
                   </select>
+                  <button className="danger" type="button" onClick={() => deleteUser(user.id)} disabled={loading || user.id === auth.user?.id}>Delete</button>
                 </div>
               ))}
             </div>
@@ -554,6 +654,7 @@ export default function App() {
               <h2>Security</h2>
               <p className="muted">Access token is short-lived. Refresh token is revocable and rotates when refreshed.</p>
               <button type="button" onClick={refreshAccessToken} disabled={loading}>Refresh access token</button>
+              <button className="danger" type="button" onClick={deleteMyAccount} disabled={loading}>Delete my account</button>
             </div>
           </div>
         )}
@@ -585,15 +686,21 @@ function Select({ label, value, options, onChange }) {
   );
 }
 
-function DataList({ title, items }) {
+function DataList({ title, items, onEdit, onDelete }) {
   return (
     <div className="dataList">
       <h3>{title}</h3>
       {items.length === 0 && <p className="muted">Nothing created yet.</p>}
       {items.map((item) => (
         <div key={item.id}>
-          <strong>{item.name || item.sku}</strong>
-          <span>{item.code || item.sku || item.id}</span>
+          <section>
+            <strong>{item.name || item.sku}</strong>
+            <span>{item.code || item.sku || item.id}</span>
+          </section>
+          <nav>
+            <button className="secondary" type="button" onClick={() => onEdit(item)}>Edit</button>
+            <button className="danger" type="button" onClick={() => onDelete(item.id)}>Delete</button>
+          </nav>
         </div>
       ))}
     </div>

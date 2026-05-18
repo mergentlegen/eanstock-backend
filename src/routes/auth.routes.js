@@ -21,6 +21,7 @@ router.post("/login", authRateLimit, validate(loginSchema), asyncHandler(control
 router.post("/refresh", validate(refreshSchema), asyncHandler(controller.refresh));
 router.post("/logout", requireAuth, validate(logoutSchema), asyncHandler(controller.logout));
 router.get("/me", requireAuth, asyncHandler(controller.me));
+router.delete("/me", requireAuth, asyncHandler(controller.deleteMe));
 router.get("/verify-email", validate(verifyEmailSchema), asyncHandler(controller.verifyEmailHandler));
 router.post("/verify-email", validate(verifyEmailSchema), asyncHandler(controller.verifyEmailHandler));
 router.post("/password-reset/request", authRateLimit, validate(passwordResetRequestSchema), asyncHandler(controller.requestPasswordResetHandler));

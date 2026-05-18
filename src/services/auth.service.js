@@ -158,6 +158,33 @@ async function logoutUser(rawRefreshToken, actorUserId, tenantId, ipAddress) {
   return { revoked: result.count > 0 };
 }
 
+async function deleteOwnAccount(user, ipAddress) {
+  return prisma.$transaction(async (tx) => {
+    const tenantUserCount = await tx.user.count({
+      where: { tenantId: user.tenantId },
+    });
+
+    await writeAudit({
+      tx,
+      tenantId: user.tenantId,
+      actorUserId: user.id,
+      action: "USER_DELETED",
+      entityType: "User",
+      entityId: user.id,
+      metadata: { selfDelete: true, email: user.email },
+      ipAddress,
+    });
+
+    if (tenantUserCount <= 1) {
+      await tx.tenant.delete({ where: { id: user.tenantId } });
+      return { deleted: true, tenantDeleted: true };
+    }
+
+    await tx.user.delete({ where: { id: user.id } });
+    return { deleted: true, tenantDeleted: false };
+  });
+}
+
 async function verifyEmail(rawToken, ipAddress) {
   const consumed = await prisma.$transaction(async (tx) => {
     const token = await consumeEmailToken({ token: rawToken, purpose: "EMAIL_VERIFICATION", tx });
@@ -311,6 +338,7 @@ module.exports = {
   loginUser,
   refreshAccessToken,
   logoutUser,
+  deleteOwnAccount,
   verifyEmail,
   requestPasswordReset,
   confirmPasswordReset,

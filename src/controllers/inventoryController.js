@@ -1,6 +1,11 @@
 const {
   createLocation,
+  listLocations,
+  updateLocation,
+  deleteLocation,
   createProduct,
+  updateProduct,
+  deleteProduct,
   listProducts,
   setInventoryStock,
   transferInventory,
@@ -17,9 +22,34 @@ async function createLocationHandler(req, res) {
   res.status(201).json({ location });
 }
 
+async function listLocationsHandler(req, res) {
+  const result = await listLocations(req.user, req.query);
+  res.json(result);
+}
+
+async function updateLocationHandler(req, res) {
+  const location = await updateLocation(req.user, req.params.locationId, req.body);
+  res.json({ location });
+}
+
+async function deleteLocationHandler(req, res) {
+  const result = await deleteLocation(req.user, req.params.locationId);
+  res.json(result);
+}
+
 async function createProductHandler(req, res) {
   const product = await createProduct(req.user, req.body);
   res.status(201).json({ product });
+}
+
+async function updateProductHandler(req, res) {
+  const product = await updateProduct(req.user, req.params.productId, req.body);
+  res.json({ product });
+}
+
+async function deleteProductHandler(req, res) {
+  const result = await deleteProduct(req.user, req.params.productId);
+  res.json(result);
 }
 
 async function listProductsHandler(req, res) {
@@ -72,7 +102,12 @@ async function runDecayHandler(req, res) {
 
 module.exports = {
   createLocationHandler,
+  listLocationsHandler,
+  updateLocationHandler,
+  deleteLocationHandler,
   createProductHandler,
+  updateProductHandler,
+  deleteProductHandler,
   listProductsHandler,
   setStockHandler,
   transferHandler,

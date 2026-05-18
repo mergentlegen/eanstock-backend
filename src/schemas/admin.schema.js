@@ -16,4 +16,16 @@ const updateUserRoleSchema = z.object({
   }),
 });
 
-module.exports = { listUsersSchema, updateUserRoleSchema };
+const userIdParamSchema = z.object({
+  params: z.object({
+    userId: z.string().uuid(),
+  }),
+});
+
+const testEmailSchema = z.object({
+  body: z.object({
+    to: z.string().email().toLowerCase(),
+  }),
+});
+
+module.exports = { listUsersSchema, updateUserRoleSchema, userIdParamSchema, testEmailSchema };

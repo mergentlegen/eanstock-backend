@@ -3,6 +3,20 @@ const { z } = require("zod");
 
 dotenv.config();
 
+const envBoolean = z.preprocess((value) => {
+  if (typeof value !== "string") {
+    return value;
+  }
+  const normalized = value.trim().toLowerCase();
+  if (["true", "1", "yes", "y"].includes(normalized)) {
+    return true;
+  }
+  if (["false", "0", "no", "n"].includes(normalized)) {
+    return false;
+  }
+  return value;
+}, z.boolean());
+
 const envSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   PORT: z.coerce.number().int().positive().default(3000),
@@ -16,14 +30,14 @@ const envSchema = z.object({
   AUTH_RATE_LIMIT_POINTS: z.coerce.number().int().positive().default(5),
   AUTH_RATE_LIMIT_WINDOW_SECONDS: z.coerce.number().int().positive().default(60),
   TRANSFER_LOCK_TTL_MS: z.coerce.number().int().positive().default(8000),
-  ENABLE_DEAD_STOCK_WORKER: z.coerce.boolean().default(true),
+  ENABLE_DEAD_STOCK_WORKER: envBoolean.default(true),
   DEAD_STOCK_DECAY_CRON: z.string().min(5).default("0 * * * *"),
   APP_BASE_URL: z.string().url().default("http://localhost:3000"),
   EMAIL_DRIVER: z.enum(["log", "smtp"]).default("log"),
   EMAIL_FROM: z.string().min(3).default("LeanStock <no-reply@leanstock.local>"),
   SMTP_HOST: z.string().optional().default(""),
   SMTP_PORT: z.coerce.number().int().positive().default(587),
-  SMTP_SECURE: z.coerce.boolean().default(false),
+  SMTP_SECURE: envBoolean.default(false),
   SMTP_USER: z.string().optional().default(""),
   SMTP_PASS: z.string().optional().default(""),
   EMAIL_VERIFICATION_TTL_MINUTES: z.coerce.number().int().positive().default(60),

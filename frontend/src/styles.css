@@ -52,6 +52,16 @@ a.secondary {
   color: #17473c;
 }
 
+button.danger {
+  border: 1px solid #f0b8ad;
+  background: #fff5f2;
+  color: #9b2f1f;
+}
+
+button.danger:hover:not(:disabled) {
+  background: #ffe8e2;
+}
+
 button.secondary:hover:not(:disabled),
 a.secondary:hover {
   background: #f7faf8;
@@ -280,6 +290,12 @@ form {
   gap: 10px;
 }
 
+.inlineActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
 .dashboardGrid {
   display: grid;
   grid-template-columns: repeat(2, minmax(280px, 1fr));
@@ -322,7 +338,7 @@ form {
 
 .tableRow {
   display: grid;
-  grid-template-columns: 1fr 150px;
+  grid-template-columns: 1fr 150px 100px;
   gap: 14px;
   align-items: center;
   border: 1px solid #e0e9e5;
@@ -331,7 +347,7 @@ form {
 }
 
 .tableRow div,
-.dataList div {
+.dataList section {
   display: grid;
   gap: 4px;
 }
@@ -353,9 +369,19 @@ form {
 }
 
 .dataList div {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 10px;
+  align-items: center;
   border: 1px solid #e0e9e5;
   border-radius: 8px;
   padding: 10px;
+}
+
+.dataList nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 @media (max-width: 920px) {
@@ -378,6 +404,10 @@ form {
 
   .twoCols,
   .tableRow {
+    grid-template-columns: 1fr;
+  }
+
+  .dataList div {
     grid-template-columns: 1fr;
   }
 }

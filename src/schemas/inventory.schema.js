@@ -12,6 +12,30 @@ const createLocationSchema = z.object({
   }),
 });
 
+const listLocationsSchema = z.object({
+  query: z.object({
+    cursor: z.string().uuid().optional(),
+    limit: z.coerce.number().int().min(1).max(50).default(20),
+    q: z.string().max(80).optional(),
+  }),
+});
+
+const locationIdParamSchema = z.object({
+  params: z.object({
+    locationId: uuid,
+  }),
+});
+
+const updateLocationSchema = locationIdParamSchema.extend({
+  body: z.object({
+    name: z.string().min(2).max(120).optional(),
+    code: z.string().min(2).max(24).regex(/^[A-Z0-9_-]+$/).optional(),
+    address: z.string().max(240).optional(),
+  }).refine((value) => Object.keys(value).length > 0, {
+    message: "At least one field must be provided",
+  }),
+});
+
 const createProductSchema = z.object({
   body: z.object({
     sku: z.string().min(2).max(64),
@@ -24,6 +48,29 @@ const createProductSchema = z.object({
     decayPercent: percent.default(10),
     decayIntervalHours: z.coerce.number().int().min(1).max(720).default(72),
     minPricePercent: percent.default(50),
+  }),
+});
+
+const productIdParamSchema = z.object({
+  params: z.object({
+    productId: uuid,
+  }),
+});
+
+const updateProductSchema = productIdParamSchema.extend({
+  body: z.object({
+    sku: z.string().min(2).max(64).optional(),
+    name: z.string().min(2).max(160).optional(),
+    supplierName: z.string().max(120).optional(),
+    supplierCost: money.optional(),
+    basePrice: money.optional(),
+    currentPrice: money.optional(),
+    deadStockAfterDays: z.coerce.number().int().min(1).max(365).optional(),
+    decayPercent: percent.optional(),
+    decayIntervalHours: z.coerce.number().int().min(1).max(720).optional(),
+    minPricePercent: percent.optional(),
+  }).refine((value) => Object.keys(value).length > 0, {
+    message: "At least one field must be provided",
   }),
 });
 
@@ -101,7 +148,12 @@ const forecastSchema = z.object({
 
 module.exports = {
   createLocationSchema,
+  listLocationsSchema,
+  updateLocationSchema,
+  locationIdParamSchema,
   createProductSchema,
+  updateProductSchema,
+  productIdParamSchema,
   listProductsSchema,
   setStockSchema,
   transferSchema,

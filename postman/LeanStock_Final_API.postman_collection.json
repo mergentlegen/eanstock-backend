@@ -17,12 +17,15 @@
     { "key": "refreshToken", "value": "" },
     { "key": "locationAId", "value": "" },
     { "key": "locationBId", "value": "" },
+    { "key": "locationDeleteId", "value": "" },
     { "key": "productId", "value": "" },
+    { "key": "productDeleteId", "value": "" },
     { "key": "reservationToken", "value": "" },
     { "key": "adminEmail", "value": "admin@leanstock.local" },
     { "key": "adminPassword", "value": "AdminPass1!" },
     { "key": "adminAccessToken", "value": "" },
-    { "key": "roleUserId", "value": "" }
+    { "key": "roleUserId", "value": "" },
+    { "key": "testEmail", "value": "bandkyle41@gmail.com" }
   ],
   "item": [
     {
@@ -116,7 +119,36 @@
       }
     },
     {
-      "name": "10 Create Product",
+      "name": "10 List Locations",
+      "request": { "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessToken}}", "type": "string" }] }, "method": "GET", "url": "{{baseUrl}}/locations?limit=20" }
+    },
+    {
+      "name": "11 Update Location B",
+      "request": {
+        "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessToken}}", "type": "string" }] },
+        "method": "PATCH",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": { "mode": "raw", "raw": "{\n  \"name\": \"Shop B Updated\",\n  \"address\": \"Updated address 20\"\n}" },
+        "url": "{{baseUrl}}/locations/{{locationBId}}"
+      }
+    },
+    {
+      "name": "12 Create Location For Delete",
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.collectionVariables.set('locationDeleteId', pm.response.json().location.id);"] } }],
+      "request": {
+        "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessToken}}", "type": "string" }] },
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": { "mode": "raw", "raw": "{\n  \"name\": \"Temporary Delete Shop\",\n  \"code\": \"DEL{{$timestamp}}\"\n}" },
+        "url": "{{baseUrl}}/locations"
+      }
+    },
+    {
+      "name": "13 Delete Location",
+      "request": { "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessToken}}", "type": "string" }] }, "method": "DELETE", "url": "{{baseUrl}}/locations/{{locationDeleteId}}" }
+    },
+    {
+      "name": "14 Create Product",
       "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.collectionVariables.set('productId', pm.response.json().product.id);"] } }],
       "request": {
         "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessToken}}", "type": "string" }] },
@@ -127,7 +159,36 @@
       }
     },
     {
-      "name": "11 Set Stock",
+      "name": "15 List Products",
+      "request": { "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessToken}}", "type": "string" }] }, "method": "GET", "url": "{{baseUrl}}/products?limit=20" }
+    },
+    {
+      "name": "16 Update Product",
+      "request": {
+        "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessToken}}", "type": "string" }] },
+        "method": "PATCH",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": { "mode": "raw", "raw": "{\n  \"name\": \"Milk 1L Updated\",\n  \"currentPrice\": 550\n}" },
+        "url": "{{baseUrl}}/products/{{productId}}"
+      }
+    },
+    {
+      "name": "17 Create Product For Delete",
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.collectionVariables.set('productDeleteId', pm.response.json().product.id);"] } }],
+      "request": {
+        "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessToken}}", "type": "string" }] },
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": { "mode": "raw", "raw": "{\n  \"sku\": \"DELETE{{$timestamp}}\",\n  \"name\": \"Temporary Delete Product\",\n  \"supplierCost\": 100,\n  \"basePrice\": 200,\n  \"currentPrice\": 200,\n  \"decayPercent\": 10,\n  \"deadStockAfterDays\": 30,\n  \"decayIntervalHours\": 72,\n  \"minPricePercent\": 50\n}" },
+        "url": "{{baseUrl}}/products"
+      }
+    },
+    {
+      "name": "18 Delete Product",
+      "request": { "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessToken}}", "type": "string" }] }, "method": "DELETE", "url": "{{baseUrl}}/products/{{productDeleteId}}" }
+    },
+    {
+      "name": "19 Set Stock",
       "request": {
         "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessToken}}", "type": "string" }] },
         "method": "POST",
@@ -137,7 +198,7 @@
       }
     },
     {
-      "name": "12 Transfer A to B",
+      "name": "20 Transfer A to B",
       "request": {
         "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessToken}}", "type": "string" }] },
         "method": "POST",
@@ -147,7 +208,7 @@
       }
     },
     {
-      "name": "13 Reserve Stock",
+      "name": "21 Reserve Stock",
       "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.collectionVariables.set('reservationToken', pm.response.json().reservation.token);"] } }],
       "request": {
         "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessToken}}", "type": "string" }] },
@@ -158,11 +219,11 @@
       }
     },
     {
-      "name": "14 Commit Reservation",
+      "name": "22 Commit Reservation",
       "request": { "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessToken}}", "type": "string" }] }, "method": "POST", "url": "{{baseUrl}}/inventory/reservations/{{reservationToken}}/commit" }
     },
     {
-      "name": "15 Record Sale",
+      "name": "23 Record Sale",
       "request": {
         "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessToken}}", "type": "string" }] },
         "method": "POST",
@@ -172,11 +233,11 @@
       }
     },
     {
-      "name": "16 Forecast Reorder",
+      "name": "24 Forecast Reorder",
       "request": { "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessToken}}", "type": "string" }] }, "method": "GET", "url": "{{baseUrl}}/products/{{productId}}/forecast?locationId={{locationAId}}&days=30&leadTimeDays=7&safetyStock=5" }
     },
     {
-      "name": "17 Dead Stock Decay Job",
+      "name": "25 Dead Stock Decay Job",
       "request": {
         "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessToken}}", "type": "string" }] },
         "method": "POST",
@@ -186,7 +247,7 @@
       }
     },
     {
-      "name": "18 Admin Login",
+      "name": "26 Admin Login",
       "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
         "pm.collectionVariables.set('adminAccessToken', pm.response.json().accessToken);"
       ] } }],
@@ -198,16 +259,17 @@
       }
     },
     {
-      "name": "19 Admin List Users",
+      "name": "27 Admin List Users",
       "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
         "const users = pm.response.json().data || [];",
-        "const target = users.find((user) => user.role !== 'ADMIN') || users[0];",
+        "const registeredEmail = pm.collectionVariables.get('email');",
+        "const target = users.find((user) => user.email === registeredEmail) || users.find((user) => user.role !== 'ADMIN') || users[0];",
         "if (target) pm.collectionVariables.set('roleUserId', target.id);"
       ] } }],
       "request": { "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{adminAccessToken}}", "type": "string" }] }, "method": "GET", "url": "{{baseUrl}}/admin/users?limit=20" }
     },
     {
-      "name": "20 Admin Change User Role",
+      "name": "28 Admin Change User Role",
       "request": {
         "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{adminAccessToken}}", "type": "string" }] },
         "method": "PATCH",
@@ -217,15 +279,33 @@
       }
     },
     {
-      "name": "21 Admin Audit Logs",
+      "name": "29 Admin Test Email",
+      "request": {
+        "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{adminAccessToken}}", "type": "string" }] },
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": { "mode": "raw", "raw": "{\n  \"to\": \"{{testEmail}}\"\n}" },
+        "url": "{{baseUrl}}/admin/test-email"
+      }
+    },
+    {
+      "name": "30 Admin Audit Logs",
       "request": { "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{adminAccessToken}}", "type": "string" }] }, "method": "GET", "url": "{{baseUrl}}/admin/audit-logs?limit=20" }
     },
     {
-      "name": "22 Admin Queue Visibility",
+      "name": "31 Admin Queue Visibility",
       "request": { "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{adminAccessToken}}", "type": "string" }] }, "method": "GET", "url": "{{baseUrl}}/admin/jobs" }
     },
     {
-      "name": "23 Refresh Token Rotation",
+      "name": "32 Admin Delete Registered User - Optional",
+      "request": { "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{adminAccessToken}}", "type": "string" }] }, "method": "DELETE", "url": "{{baseUrl}}/admin/users/{{roleUserId}}" }
+    },
+    {
+      "name": "33 Delete My Account - Optional",
+      "request": { "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessToken}}", "type": "string" }] }, "method": "DELETE", "url": "{{baseUrl}}/auth/me" }
+    },
+    {
+      "name": "34 Refresh Token Rotation",
       "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
         "const json = pm.response.json();",
         "pm.collectionVariables.set('accessToken', json.accessToken);",
@@ -239,7 +319,7 @@
       }
     },
     {
-      "name": "24 Logout",
+      "name": "35 Logout",
       "request": {
         "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessToken}}", "type": "string" }] },
         "method": "POST",

@@ -27,6 +27,92 @@ async function createLocation(user, input) {
   return location;
 }
 
+async function listLocations(user, { cursor, limit, q }) {
+  const rows = await prisma.location.findMany({
+    where: {
+      tenantId: user.tenantId,
+      ...(q ? { name: { contains: q, mode: "insensitive" } } : {}),
+    },
+    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+    take: limit + 1,
+    ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+  });
+
+  const hasNext = rows.length > limit;
+  const data = hasNext ? rows.slice(0, limit) : rows;
+  return {
+    data,
+    pageInfo: {
+      hasNextPage: hasNext,
+      nextCursor: hasNext ? data[data.length - 1].id : null,
+    },
+  };
+}
+
+async function updateLocation(user, locationId, input) {
+  const existing = await prisma.location.findFirst({
+    where: { id: locationId, tenantId: user.tenantId },
+  });
+  if (!existing) {
+    throw notFound("Location not found for this tenant");
+  }
+
+  const location = await prisma.location.update({
+    where: { id: locationId },
+    data: input,
+  });
+
+  await writeAudit({
+    tenantId: user.tenantId,
+    actorUserId: user.id,
+    action: "LOCATION_UPDATED",
+    entityType: "Location",
+    entityId: location.id,
+    metadata: input,
+  });
+
+  return location;
+}
+
+async function deleteLocation(user, locationId) {
+  const existing = await prisma.location.findFirst({
+    where: { id: locationId, tenantId: user.tenantId },
+  });
+  if (!existing) {
+    throw notFound("Location not found for this tenant");
+  }
+
+  const blockers = await prisma.$transaction([
+    prisma.inventoryTransfer.count({
+      where: {
+        tenantId: user.tenantId,
+        OR: [{ sourceLocationId: locationId }, { destinationLocationId: locationId }],
+      },
+    }),
+    prisma.inventoryReservation.count({ where: { tenantId: user.tenantId, locationId } }),
+    prisma.salesRecord.count({ where: { tenantId: user.tenantId, locationId } }),
+  ]);
+
+  if (blockers.some((count) => count > 0)) {
+    throw conflict("Location has transaction history and cannot be deleted");
+  }
+
+  await prisma.$transaction(async (tx) => {
+    await tx.location.delete({ where: { id: locationId } });
+    await writeAudit({
+      tx,
+      tenantId: user.tenantId,
+      actorUserId: user.id,
+      action: "LOCATION_DELETED",
+      entityType: "Location",
+      entityId: locationId,
+      metadata: { name: existing.name, code: existing.code },
+    });
+  });
+
+  return { deleted: true, id: locationId };
+}
+
 async function createProduct(user, input) {
   if (input.currentPrice && input.currentPrice < input.supplierCost) {
     throw badRequest("Current price cannot be lower than supplier cost on creation");
@@ -58,6 +144,79 @@ async function createProduct(user, input) {
   });
 
   return product;
+}
+
+async function updateProduct(user, productId, input) {
+  const existing = await prisma.product.findFirst({
+    where: { id: productId, tenantId: user.tenantId },
+  });
+  if (!existing) {
+    throw notFound("Product not found for this tenant");
+  }
+
+  const nextSupplierCost = input.supplierCost ?? Number(existing.supplierCost);
+  const nextCurrentPrice = input.currentPrice ?? Number(existing.currentPrice);
+  if (nextCurrentPrice < nextSupplierCost) {
+    throw badRequest("Current price cannot be lower than supplier cost");
+  }
+
+  const decimalFields = ["supplierCost", "basePrice", "currentPrice", "decayPercent", "minPricePercent"];
+  const data = { ...input };
+  for (const field of decimalFields) {
+    if (data[field] !== undefined) {
+      data[field] = new Prisma.Decimal(data[field]);
+    }
+  }
+
+  const product = await prisma.product.update({
+    where: { id: productId },
+    data,
+  });
+
+  await writeAudit({
+    tenantId: user.tenantId,
+    actorUserId: user.id,
+    action: "PRODUCT_UPDATED",
+    entityType: "Product",
+    entityId: product.id,
+    metadata: input,
+  });
+
+  return product;
+}
+
+async function deleteProduct(user, productId) {
+  const existing = await prisma.product.findFirst({
+    where: { id: productId, tenantId: user.tenantId },
+  });
+  if (!existing) {
+    throw notFound("Product not found for this tenant");
+  }
+
+  const blockers = await prisma.$transaction([
+    prisma.inventoryTransfer.count({ where: { tenantId: user.tenantId, productId } }),
+    prisma.inventoryReservation.count({ where: { tenantId: user.tenantId, productId } }),
+    prisma.salesRecord.count({ where: { tenantId: user.tenantId, productId } }),
+  ]);
+
+  if (blockers.some((count) => count > 0)) {
+    throw conflict("Product has transaction history and cannot be deleted");
+  }
+
+  await prisma.$transaction(async (tx) => {
+    await tx.product.delete({ where: { id: productId } });
+    await writeAudit({
+      tx,
+      tenantId: user.tenantId,
+      actorUserId: user.id,
+      action: "PRODUCT_DELETED",
+      entityType: "Product",
+      entityId: productId,
+      metadata: { sku: existing.sku, name: existing.name },
+    });
+  });
+
+  return { deleted: true, id: productId };
 }
 
 async function listProducts(user, { cursor, limit, q }) {
@@ -592,7 +751,12 @@ function cryptoRandomToken() {
 
 module.exports = {
   createLocation,
+  listLocations,
+  updateLocation,
+  deleteLocation,
   createProduct,
+  updateProduct,
+  deleteProduct,
   listProducts,
   setInventoryStock,
   transferInventory,
