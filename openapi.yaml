@@ -9,6 +9,8 @@ tags:
   - name: Auth
   - name: Locations
   - name: Products
+  - name: Suppliers
+  - name: Purchase Orders
   - name: Inventory
   - name: Jobs
   - name: Admin
@@ -594,6 +596,62 @@ paths:
             application/json:
               schema: { type: object }
               example: { deleted: true }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+        "500": { $ref: "#/components/responses/ServerError" }
+  /inventory:
+    get:
+      tags: [Inventory]
+      summary: List tenant inventory rows by product and location
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: cursor
+          schema: { type: string, format: uuid }
+        - in: query
+          name: limit
+          schema: { type: integer, minimum: 1, maximum: 100, default: 50 }
+        - in: query
+          name: productId
+          schema: { type: string, format: uuid }
+        - in: query
+          name: locationId
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Inventory page
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/InventoryItem"
+                  pageInfo:
+                    $ref: "#/components/schemas/PageInfo"
+              example:
+                data:
+                  - id: 1f32562c-30f1-4e26-9f99-c77505d65c4e
+                    productId: 46ae7c91-7c29-44df-8f1b-ef24f77763db
+                    locationId: 99df1317-b0b8-4512-a7d7-17af8837375c
+                    quantity: 25
+                    reservedQuantity: 3
+                    product:
+                      sku: MILK-1L
+                      name: Milk 1L
+                    location:
+                      name: Shop A
+                      code: SHOP_A
+                pageInfo:
+                  hasNextPage: false
+                  nextCursor: null
         "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
@@ -1345,6 +1403,28 @@ components:
           type: integer
         version:
           type: integer
+        product:
+          type: object
+          properties:
+            id:
+              type: string
+              format: uuid
+            sku:
+              type: string
+            name:
+              type: string
+            currentPrice:
+              type: string
+        location:
+          type: object
+          properties:
+            id:
+              type: string
+              format: uuid
+            name:
+              type: string
+            code:
+              type: string
     TransferRequest:
       type: object
       required: [productId, sourceLocationId, destinationLocationId, quantity]

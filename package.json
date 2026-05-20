@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "nodemon src/server.js",
     "start": "node src/server.js",
+    "start:worker": "node src/worker.js",
     "dev:client": "vite --config frontend/vite.config.js --host 0.0.0.0",
     "build:client": "vite build --config frontend/vite.config.js",
     "lint": "eslint .",
@@ -30,6 +31,7 @@
     "nodemailer": "^8.0.7",
     "react": "^19.2.6",
     "react-dom": "^19.2.6",
+    "react-hot-toast": "^2.6.0",
     "redlock": "^5.0.0-beta.2",
     "swagger-ui-express": "5.0.1",
     "vite": "^8.0.12",

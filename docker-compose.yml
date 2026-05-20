@@ -1,3 +1,36 @@
+x-app-env: &app-env
+  NODE_ENV: ${NODE_ENV:-production}
+  ENVIRONMENT: ${ENVIRONMENT:-production}
+  DATABASE_URL: ${DATABASE_URL:-postgresql://leanstock:leanstock@postgres:5432/leanstock?schema=public}
+  REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+  JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:-local-compose-access-secret-change-me-123456789}
+  JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-local-compose-refresh-secret-change-me-123456789}
+  JWT_SECRET_KEY: ${JWT_SECRET_KEY:-local-compose-access-secret-change-me-123456789}
+  JWT_REFRESH_SECRET_KEY: ${JWT_REFRESH_SECRET_KEY:-local-compose-refresh-secret-change-me-123456789}
+  ACCESS_TOKEN_TTL_SECONDS: ${ACCESS_TOKEN_TTL_SECONDS:-900}
+  REFRESH_TOKEN_TTL_DAYS: ${REFRESH_TOKEN_TTL_DAYS:-14}
+  CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173,http://localhost:3000}
+  AUTH_RATE_LIMIT_POINTS: ${AUTH_RATE_LIMIT_POINTS:-5}
+  AUTH_RATE_LIMIT_WINDOW_SECONDS: ${AUTH_RATE_LIMIT_WINDOW_SECONDS:-60}
+  TRANSFER_LOCK_TTL_MS: ${TRANSFER_LOCK_TTL_MS:-8000}
+  ENABLE_DEAD_STOCK_WORKER: ${ENABLE_DEAD_STOCK_WORKER:-true}
+  DEAD_STOCK_DECAY_CRON: ${DEAD_STOCK_DECAY_CRON:-0 * * * *}
+  APP_BASE_URL: ${APP_BASE_URL:-http://localhost:5173}
+  EMAIL_DRIVER: ${EMAIL_DRIVER:-log}
+  EMAIL_API_KEY: ${EMAIL_API_KEY:-}
+  EMAIL_FROM_ADDRESS: ${EMAIL_FROM_ADDRESS:-LeanStock <no-reply@leanstock.local>}
+  EMAIL_FROM: ${EMAIL_FROM:-LeanStock <no-reply@leanstock.local>}
+  SMTP_HOST: ${SMTP_HOST:-}
+  SMTP_PORT: ${SMTP_PORT:-587}
+  SMTP_SECURE: ${SMTP_SECURE:-false}
+  SMTP_USER: ${SMTP_USER:-}
+  SMTP_PASS: ${SMTP_PASS:-}
+  EMAIL_VERIFICATION_TTL_MINUTES: ${EMAIL_VERIFICATION_TTL_MINUTES:-60}
+  PASSWORD_RESET_TTL_MINUTES: ${PASSWORD_RESET_TTL_MINUTES:-30}
+  RESERVATION_TTL_SECONDS: ${RESERVATION_TTL_SECONDS:-900}
+  LOW_STOCK_THRESHOLD_DAYS: ${LOW_STOCK_THRESHOLD_DAYS:-5}
+  SEED_DEMO_USERS: ${SEED_DEMO_USERS:-true}
+
 services:
   postgres:
     image: postgres:15-alpine
@@ -32,10 +65,39 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-    env_file:
-      - .env
+    environment:
+      <<: *app-env
+      PORT: 3000
+      RUN_WORKERS_IN_API: "false"
     ports:
-      - "3000:3000"
+      - "${BACKEND_PORT:-3000}:3000"
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"require('http').get('http://localhost:3000/health',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))\""]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  worker:
+    build: .
+    depends_on:
+      api:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      <<: *app-env
+      RUN_WORKERS_IN_API: "true"
+    command: ["npm", "run", "start:worker"]
+
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - "${FRONTEND_PORT:-5173}:80"
 
 volumes:
   postgres_data:

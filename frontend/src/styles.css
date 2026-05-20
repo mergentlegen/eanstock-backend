@@ -161,8 +161,7 @@ form {
 }
 
 .authPanel,
-.card,
-.notice {
+.card {
   border: 1px solid #d5e1dc;
   border-radius: 8px;
   background: #ffffff;
@@ -211,28 +210,6 @@ form {
 .userCard span,
 .tableRow span {
   color: #60736d;
-}
-
-.notice {
-  display: grid;
-  gap: 4px;
-  margin-top: 16px;
-  padding: 14px 16px;
-  box-shadow: none;
-}
-
-.notice.info {
-  border-color: #cadbd5;
-}
-
-.notice.success {
-  border-color: #a7dcc8;
-  background: #f1fbf6;
-}
-
-.notice.error {
-  border-color: #f0b8ad;
-  background: #fff5f2;
 }
 
 .platform {
@@ -324,6 +301,12 @@ form {
   gap: 12px;
 }
 
+.threeCols {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(120px, 1fr));
+  gap: 12px;
+}
+
 .cardHeader {
   display: flex;
   align-items: flex-start;
@@ -359,6 +342,87 @@ form {
 
 .listCard {
   align-content: start;
+}
+
+.stockBoard {
+  grid-column: 1 / -1;
+}
+
+.stockTable {
+  display: grid;
+  gap: 8px;
+  overflow-x: auto;
+}
+
+.stockHeader,
+.stockRow {
+  min-width: 720px;
+  display: grid;
+  grid-template-columns: 1.4fr 1.2fr 110px 110px 110px;
+  gap: 12px;
+  align-items: center;
+}
+
+.stockHeader {
+  color: #60736d;
+  font-size: 12px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.stockRow {
+  border: 1px solid #e0e9e5;
+  border-radius: 8px;
+  padding: 12px;
+  background: #fbfdfc;
+}
+
+.stockRow span {
+  display: grid;
+  gap: 3px;
+}
+
+.stockRow small {
+  color: #60736d;
+}
+
+.dangerText {
+  color: #9b2f1f;
+}
+
+.resultBox,
+.queueGrid section {
+  display: grid;
+  gap: 7px;
+  border: 1px solid #d8e5df;
+  border-radius: 8px;
+  background: #f8fbfa;
+  padding: 12px;
+}
+
+.resultBox span {
+  color: #40524d;
+}
+
+.queueGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(240px, 1fr));
+  gap: 12px;
+  border-top: 1px solid #e4ece8;
+  padding-top: 14px;
+}
+
+.metricRow {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.metricRow span {
+  display: grid;
+  gap: 3px;
+  color: #60736d;
+  font-size: 13px;
 }
 
 .dataList {
@@ -403,8 +467,14 @@ form {
   }
 
   .twoCols,
+  .threeCols,
+  .queueGrid,
   .tableRow {
     grid-template-columns: 1fr;
+  }
+
+  .metricRow {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .dataList div {

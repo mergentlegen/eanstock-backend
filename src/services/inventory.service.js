@@ -117,6 +117,9 @@ async function createProduct(user, input) {
   if (input.currentPrice && input.currentPrice < input.supplierCost) {
     throw badRequest("Current price cannot be lower than supplier cost on creation");
   }
+  if (input.supplierId) {
+    await ensureTenantSupplier(user.tenantId, input.supplierId);
+  }
 
   const product = await prisma.product.create({
     data: {
@@ -124,6 +127,7 @@ async function createProduct(user, input) {
       sku: input.sku,
       name: input.name,
       supplierName: input.supplierName,
+      supplierId: input.supplierId,
       supplierCost: new Prisma.Decimal(input.supplierCost),
       basePrice: new Prisma.Decimal(input.basePrice),
       currentPrice: new Prisma.Decimal(input.currentPrice ?? input.basePrice),
@@ -158,6 +162,9 @@ async function updateProduct(user, productId, input) {
   const nextCurrentPrice = input.currentPrice ?? Number(existing.currentPrice);
   if (nextCurrentPrice < nextSupplierCost) {
     throw badRequest("Current price cannot be lower than supplier cost");
+  }
+  if (input.supplierId) {
+    await ensureTenantSupplier(user.tenantId, input.supplierId);
   }
 
   const decimalFields = ["supplierCost", "basePrice", "currentPrice", "decayPercent", "minPricePercent"];
@@ -226,6 +233,410 @@ async function listProducts(user, { cursor, limit, q }) {
       ...(q ? { name: { contains: q, mode: "insensitive" } } : {}),
     },
     orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+    take: limit + 1,
+    ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+  });
+
+  const hasNext = rows.length > limit;
+  const data = hasNext ? rows.slice(0, limit) : rows;
+  return {
+    data,
+    pageInfo: {
+      hasNextPage: hasNext,
+      nextCursor: hasNext ? data[data.length - 1].id : null,
+    },
+  };
+}
+
+async function createSupplier(user, input) {
+  const supplier = await prisma.supplier.create({
+    data: {
+      tenantId: user.tenantId,
+      name: input.name,
+      email: input.email,
+      contactName: input.contactName,
+      phone: input.phone,
+    },
+  });
+
+  await writeAudit({
+    tenantId: user.tenantId,
+    actorUserId: user.id,
+    action: "SUPPLIER_CREATED",
+    entityType: "Supplier",
+    entityId: supplier.id,
+    metadata: { name: supplier.name, email: supplier.email },
+  });
+
+  return supplier;
+}
+
+async function listSuppliers(user, { cursor, limit, q }) {
+  const rows = await prisma.supplier.findMany({
+    where: {
+      tenantId: user.tenantId,
+      ...(q ? { name: { contains: q, mode: "insensitive" } } : {}),
+    },
+    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+    take: limit + 1,
+    ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+  });
+
+  const hasNext = rows.length > limit;
+  const data = hasNext ? rows.slice(0, limit) : rows;
+  return {
+    data,
+    pageInfo: {
+      hasNextPage: hasNext,
+      nextCursor: hasNext ? data[data.length - 1].id : null,
+    },
+  };
+}
+
+async function updateSupplier(user, supplierId, input) {
+  const existing = await prisma.supplier.findFirst({
+    where: { id: supplierId, tenantId: user.tenantId },
+  });
+  if (!existing) {
+    throw notFound("Supplier not found for this tenant");
+  }
+
+  const supplier = await prisma.supplier.update({
+    where: { id: supplierId },
+    data: input,
+  });
+
+  await writeAudit({
+    tenantId: user.tenantId,
+    actorUserId: user.id,
+    action: "SUPPLIER_UPDATED",
+    entityType: "Supplier",
+    entityId: supplier.id,
+    metadata: input,
+  });
+
+  return supplier;
+}
+
+async function deleteSupplier(user, supplierId) {
+  const existing = await prisma.supplier.findFirst({
+    where: { id: supplierId, tenantId: user.tenantId },
+  });
+  if (!existing) {
+    throw notFound("Supplier not found for this tenant");
+  }
+
+  const purchaseOrderCount = await prisma.purchaseOrder.count({
+    where: { tenantId: user.tenantId, supplierId },
+  });
+  if (purchaseOrderCount > 0) {
+    throw conflict("Supplier has purchase order history and cannot be deleted");
+  }
+
+  await prisma.$transaction(async (tx) => {
+    await tx.product.updateMany({
+      where: { tenantId: user.tenantId, supplierId },
+      data: { supplierId: null },
+    });
+    await tx.supplier.delete({ where: { id: supplierId } });
+    await writeAudit({
+      tx,
+      tenantId: user.tenantId,
+      actorUserId: user.id,
+      action: "SUPPLIER_DELETED",
+      entityType: "Supplier",
+      entityId: supplierId,
+      metadata: { name: existing.name },
+    });
+  });
+
+  return { deleted: true, id: supplierId };
+}
+
+async function createPurchaseOrder(user, input) {
+  const supplier = await ensureTenantSupplier(user.tenantId, input.supplierId);
+  const productIds = input.items.map((item) => item.productId);
+  const uniqueProductIds = new Set(productIds);
+  if (uniqueProductIds.size !== productIds.length) {
+    throw badRequest("Purchase order cannot contain duplicate products");
+  }
+
+  const products = await prisma.product.findMany({
+    where: { tenantId: user.tenantId, id: { in: productIds } },
+  });
+  if (products.length !== productIds.length) {
+    throw notFound("One or more products were not found for this tenant");
+  }
+  const productById = new Map(products.map((product) => [product.id, product]));
+
+  const purchaseOrder = await prisma.$transaction(async (tx) => {
+    const created = await tx.purchaseOrder.create({
+      data: {
+        tenantId: user.tenantId,
+        supplierId: supplier.id,
+        expectedAt: input.expectedAt,
+        createdByUserId: user.id,
+        items: {
+          create: input.items.map((item) => {
+            const product = productById.get(item.productId);
+            return {
+              tenantId: user.tenantId,
+              productId: item.productId,
+              quantity: item.quantity,
+              unitCost: new Prisma.Decimal(item.unitCost ?? product.supplierCost),
+            };
+          }),
+        },
+      },
+      include: purchaseOrderInclude,
+    });
+
+    await writeAudit({
+      tx,
+      tenantId: user.tenantId,
+      actorUserId: user.id,
+      action: "PURCHASE_ORDER_CREATED",
+      entityType: "PurchaseOrder",
+      entityId: created.id,
+      metadata: { supplierId: supplier.id, itemCount: input.items.length },
+    });
+
+    return created;
+  });
+
+  return purchaseOrder;
+}
+
+async function listPurchaseOrders(user, { cursor, limit, status }) {
+  const rows = await prisma.purchaseOrder.findMany({
+    where: {
+      tenantId: user.tenantId,
+      ...(status ? { status } : {}),
+    },
+    include: purchaseOrderInclude,
+    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+    take: limit + 1,
+    ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+  });
+
+  const hasNext = rows.length > limit;
+  const data = hasNext ? rows.slice(0, limit) : rows;
+  return {
+    data,
+    pageInfo: {
+      hasNextPage: hasNext,
+      nextCursor: hasNext ? data[data.length - 1].id : null,
+    },
+  };
+}
+
+async function getPurchaseOrder(user, purchaseOrderId) {
+  const purchaseOrder = await prisma.purchaseOrder.findFirst({
+    where: { id: purchaseOrderId, tenantId: user.tenantId },
+    include: purchaseOrderInclude,
+  });
+  if (!purchaseOrder) {
+    throw notFound("Purchase order not found for this tenant");
+  }
+  return purchaseOrder;
+}
+
+async function sendPurchaseOrder(user, purchaseOrderId) {
+  const purchaseOrder = await prisma.$transaction(async (tx) => {
+    const existing = await tx.purchaseOrder.findFirst({
+      where: { id: purchaseOrderId, tenantId: user.tenantId },
+      include: purchaseOrderInclude,
+    });
+    if (!existing) {
+      throw notFound("Purchase order not found for this tenant");
+    }
+    if (existing.status !== "DRAFT") {
+      throw conflict("Only draft purchase orders can be sent");
+    }
+
+    const updated = await tx.purchaseOrder.update({
+      where: { id: purchaseOrderId },
+      data: { status: "SENT", sentAt: new Date() },
+      include: purchaseOrderInclude,
+    });
+
+    await writeAudit({
+      tx,
+      tenantId: user.tenantId,
+      actorUserId: user.id,
+      action: "PURCHASE_ORDER_SENT",
+      entityType: "PurchaseOrder",
+      entityId: updated.id,
+      metadata: { supplierId: updated.supplierId },
+    });
+
+    return updated;
+  });
+
+  await queueEmail({
+    to: purchaseOrder.supplier.email || user.email,
+    subject: `LeanStock purchase order ${purchaseOrder.id}`,
+    text: `Purchase order ${purchaseOrder.id} was sent with ${purchaseOrder.items.length} line item(s).`,
+    html: `<p>Purchase order <b>${purchaseOrder.id}</b> was sent with ${purchaseOrder.items.length} line item(s).</p>`,
+    eventType: "PURCHASE_ORDER_SENT",
+    metadata: { tenantId: user.tenantId, purchaseOrderId: purchaseOrder.id },
+  });
+
+  return purchaseOrder;
+}
+
+async function receivePurchaseOrder(user, purchaseOrderId, input) {
+  const lockKey = `lock:purchase-order:${user.tenantId}:${purchaseOrderId}`;
+  const purchaseOrder = await withRedisLock([lockKey], async () => {
+    return prisma.$transaction(async (tx) => {
+      await ensureTenantLocation(user.tenantId, input.locationId, tx);
+
+      const existing = await tx.purchaseOrder.findFirst({
+        where: { id: purchaseOrderId, tenantId: user.tenantId },
+        include: purchaseOrderInclude,
+      });
+      if (!existing) {
+        throw notFound("Purchase order not found for this tenant");
+      }
+      if (!["DRAFT", "SENT"].includes(existing.status)) {
+        throw conflict("Only draft or sent purchase orders can be received");
+      }
+
+      const requestedByProductId = new Map((input.receivedItems || []).map((item) => [item.productId, item.quantity]));
+      const hasCustomReceipt = requestedByProductId.size > 0;
+
+      for (const item of existing.items) {
+        const receivedQuantity = hasCustomReceipt ? (requestedByProductId.get(item.productId) || 0) : item.quantity;
+        if (receivedQuantity < 0 || receivedQuantity > item.quantity) {
+          throw badRequest("Received quantity cannot exceed ordered quantity");
+        }
+        if (receivedQuantity === 0) {
+          continue;
+        }
+
+        await tx.inventoryItem.upsert({
+          where: {
+            tenantId_productId_locationId: {
+              tenantId: user.tenantId,
+              productId: item.productId,
+              locationId: input.locationId,
+            },
+          },
+          create: {
+            tenantId: user.tenantId,
+            productId: item.productId,
+            locationId: input.locationId,
+            quantity: receivedQuantity,
+            receivedAt: new Date(),
+          },
+          update: {
+            quantity: { increment: receivedQuantity },
+            receivedAt: new Date(),
+            version: { increment: 1 },
+          },
+        });
+
+        await tx.purchaseOrderItem.update({
+          where: { id: item.id },
+          data: { receivedQuantity },
+        });
+      }
+
+      const updated = await tx.purchaseOrder.update({
+        where: { id: purchaseOrderId },
+        data: { status: "RECEIVED", receivedAt: new Date() },
+        include: purchaseOrderInclude,
+      });
+
+      await writeAudit({
+        tx,
+        tenantId: user.tenantId,
+        actorUserId: user.id,
+        action: "PURCHASE_ORDER_RECEIVED",
+        entityType: "PurchaseOrder",
+        entityId: updated.id,
+        metadata: { locationId: input.locationId },
+      });
+
+      return updated;
+    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+  });
+
+  await queueEmail({
+    to: user.email,
+    subject: "Purchase order received",
+    text: `Purchase order ${purchaseOrder.id} was received into inventory.`,
+    html: `<p>Purchase order <b>${purchaseOrder.id}</b> was received into inventory.</p>`,
+    eventType: "PURCHASE_ORDER_RECEIVED",
+    metadata: { tenantId: user.tenantId, purchaseOrderId: purchaseOrder.id },
+  });
+
+  return purchaseOrder;
+}
+
+async function cancelPurchaseOrder(user, purchaseOrderId) {
+  const purchaseOrder = await prisma.$transaction(async (tx) => {
+    const existing = await tx.purchaseOrder.findFirst({
+      where: { id: purchaseOrderId, tenantId: user.tenantId },
+      include: purchaseOrderInclude,
+    });
+    if (!existing) {
+      throw notFound("Purchase order not found for this tenant");
+    }
+    if (existing.status === "RECEIVED") {
+      throw conflict("Received purchase orders cannot be cancelled");
+    }
+    if (existing.status === "CANCELLED") {
+      throw conflict("Purchase order is already cancelled");
+    }
+
+    const updated = await tx.purchaseOrder.update({
+      where: { id: purchaseOrderId },
+      data: { status: "CANCELLED", cancelledAt: new Date() },
+      include: purchaseOrderInclude,
+    });
+
+    await writeAudit({
+      tx,
+      tenantId: user.tenantId,
+      actorUserId: user.id,
+      action: "PURCHASE_ORDER_CANCELLED",
+      entityType: "PurchaseOrder",
+      entityId: updated.id,
+      metadata: { supplierId: updated.supplierId },
+    });
+
+    return updated;
+  });
+
+  return purchaseOrder;
+}
+
+async function listInventory(user, { cursor, limit, productId, locationId }) {
+  const rows = await prisma.inventoryItem.findMany({
+    where: {
+      tenantId: user.tenantId,
+      ...(productId ? { productId } : {}),
+      ...(locationId ? { locationId } : {}),
+    },
+    include: {
+      product: {
+        select: {
+          id: true,
+          sku: true,
+          name: true,
+          currentPrice: true,
+        },
+      },
+      location: {
+        select: {
+          id: true,
+          name: true,
+          code: true,
+        },
+      },
+    },
+    orderBy: [{ updatedAt: "desc" }, { id: "desc" }],
     take: limit + 1,
     ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
   });
@@ -687,6 +1098,54 @@ async function applyDeadStockDecayForTenant({ tenantId, actorUserId = null, now 
   return { updatedCount: updatedProducts.length, products: updatedProducts };
 }
 
+async function releaseExpiredReservationsForTenant({ tenantId, now = new Date() }) {
+  const reservations = await prisma.inventoryReservation.findMany({
+    where: {
+      tenantId,
+      status: "RESERVED",
+      expiresAt: { lte: now },
+    },
+  });
+
+  let releasedCount = 0;
+
+  for (const reservation of reservations) {
+    const lockKey = `lock:reservation:${tenantId}:${reservation.productId}:${reservation.locationId}`;
+    await withRedisLock([lockKey], async () => {
+      await prisma.$transaction(async (tx) => {
+        const updated = await tx.inventoryReservation.updateMany({
+          where: {
+            id: reservation.id,
+            status: "RESERVED",
+          },
+          data: { status: "EXPIRED" },
+        });
+
+        if (updated.count !== 1) {
+          return;
+        }
+
+        await tx.inventoryItem.updateMany({
+          where: {
+            tenantId,
+            productId: reservation.productId,
+            locationId: reservation.locationId,
+            reservedQuantity: { gte: reservation.quantity },
+          },
+          data: {
+            reservedQuantity: { decrement: reservation.quantity },
+            version: { increment: 1 },
+          },
+        });
+
+        releasedCount += 1;
+      }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+    });
+  }
+
+  return { releasedCount };
+}
+
 function calculateDeadStockPrice({
   currentPrice,
   basePrice,
@@ -741,6 +1200,34 @@ async function ensureTenantProductAndLocation(tenantId, productId, locationId, t
   }
 }
 
+async function ensureTenantLocation(tenantId, locationId, tx = prisma) {
+  const location = await tx.location.findFirst({ where: { id: locationId, tenantId } });
+  if (!location) {
+    throw notFound("Location not found for this tenant");
+  }
+  return location;
+}
+
+async function ensureTenantSupplier(tenantId, supplierId, tx = prisma) {
+  const supplier = await tx.supplier.findFirst({ where: { id: supplierId, tenantId } });
+  if (!supplier) {
+    throw notFound("Supplier not found for this tenant");
+  }
+  return supplier;
+}
+
+const purchaseOrderInclude = {
+  supplier: true,
+  items: {
+    include: {
+      product: true,
+    },
+    orderBy: {
+      createdAt: "asc",
+    },
+  },
+};
+
 function roundMoney(value) {
   return Math.round((value + Number.EPSILON) * 100) / 100;
 }
@@ -758,6 +1245,17 @@ module.exports = {
   updateProduct,
   deleteProduct,
   listProducts,
+  createSupplier,
+  listSuppliers,
+  updateSupplier,
+  deleteSupplier,
+  createPurchaseOrder,
+  listPurchaseOrders,
+  getPurchaseOrder,
+  sendPurchaseOrder,
+  receivePurchaseOrder,
+  cancelPurchaseOrder,
+  listInventory,
   setInventoryStock,
   transferInventory,
   reserveInventory,
@@ -767,5 +1265,6 @@ module.exports = {
   forecastReorder,
   applyDeadStockDecay,
   applyDeadStockDecayForTenant,
+  releaseExpiredReservationsForTenant,
   calculateDeadStockPrice,
 };

@@ -3,6 +3,13 @@ const { z } = require("zod");
 
 dotenv.config();
 
+process.env.NODE_ENV = process.env.NODE_ENV || process.env.ENVIRONMENT;
+process.env.PORT = process.env.PORT || process.env.BACKEND_PORT;
+process.env.JWT_ACCESS_SECRET = process.env.JWT_ACCESS_SECRET || process.env.JWT_SECRET_KEY;
+process.env.JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET || process.env.JWT_REFRESH_SECRET_KEY;
+process.env.EMAIL_FROM = process.env.EMAIL_FROM || process.env.EMAIL_FROM_ADDRESS;
+process.env.SMTP_PASS = process.env.SMTP_PASS || process.env.EMAIL_API_KEY;
+
 const envBoolean = z.preprocess((value) => {
   if (typeof value !== "string") {
     return value;
@@ -19,11 +26,16 @@ const envBoolean = z.preprocess((value) => {
 
 const envSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
+  ENVIRONMENT: z.enum(["development", "test", "production"]).optional(),
   PORT: z.coerce.number().int().positive().default(3000),
+  BACKEND_PORT: z.coerce.number().int().positive().optional(),
+  FRONTEND_PORT: z.coerce.number().int().positive().optional(),
   DATABASE_URL: z.string().url(),
   REDIS_URL: z.string().url(),
   JWT_ACCESS_SECRET: z.string().min(32),
   JWT_REFRESH_SECRET: z.string().min(32),
+  JWT_SECRET_KEY: z.string().min(32).optional(),
+  JWT_REFRESH_SECRET_KEY: z.string().min(32).optional(),
   ACCESS_TOKEN_TTL_SECONDS: z.coerce.number().int().positive().default(900),
   REFRESH_TOKEN_TTL_DAYS: z.coerce.number().int().positive().default(14),
   CORS_ORIGINS: z.string().min(1),
@@ -31,10 +43,13 @@ const envSchema = z.object({
   AUTH_RATE_LIMIT_WINDOW_SECONDS: z.coerce.number().int().positive().default(60),
   TRANSFER_LOCK_TTL_MS: z.coerce.number().int().positive().default(8000),
   ENABLE_DEAD_STOCK_WORKER: envBoolean.default(true),
+  RUN_WORKERS_IN_API: envBoolean.default(true),
   DEAD_STOCK_DECAY_CRON: z.string().min(5).default("0 * * * *"),
   APP_BASE_URL: z.string().url().default("http://localhost:3000"),
   EMAIL_DRIVER: z.enum(["log", "smtp"]).default("log"),
   EMAIL_FROM: z.string().min(3).default("LeanStock <no-reply@leanstock.local>"),
+  EMAIL_FROM_ADDRESS: z.string().min(3).optional(),
+  EMAIL_API_KEY: z.string().optional().default(""),
   SMTP_HOST: z.string().optional().default(""),
   SMTP_PORT: z.coerce.number().int().positive().default(587),
   SMTP_SECURE: envBoolean.default(false),

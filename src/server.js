@@ -8,18 +8,29 @@ const { startWorkers, stopWorkers } = require("./services/worker.service");
 
 async function main() {
   await connectRedis();
-  startWorkers();
+  if (env.RUN_WORKERS_IN_API) {
+    startWorkers();
+  }
   const app = createApp();
-  startDeadStockWorker();
+  if (env.RUN_WORKERS_IN_API) {
+    startDeadStockWorker();
+  }
   const server = app.listen(env.PORT, () => {
     console.log(`LeanStock API listening on port ${env.PORT}`);
     console.log(`Swagger UI: http://localhost:${env.PORT}/docs`);
   });
 
   async function shutdown() {
-    stopDeadStockWorker();
+    if (env.RUN_WORKERS_IN_API) {
+      stopDeadStockWorker();
+    }
     server.close(async () => {
-      await Promise.all([stopWorkers(), closeQueues(), disconnectRedis(), disconnectPrisma()]);
+      await Promise.all([
+        env.RUN_WORKERS_IN_API ? stopWorkers() : Promise.resolve(),
+        closeQueues(),
+        disconnectRedis(),
+        disconnectPrisma(),
+      ]);
       process.exit(0);
     });
   }

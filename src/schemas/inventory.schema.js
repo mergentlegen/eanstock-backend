@@ -41,6 +41,7 @@ const createProductSchema = z.object({
     sku: z.string().min(2).max(64),
     name: z.string().min(2).max(160),
     supplierName: z.string().max(120).optional(),
+    supplierId: uuid.optional(),
     supplierCost: money,
     basePrice: money,
     currentPrice: money.optional(),
@@ -62,6 +63,7 @@ const updateProductSchema = productIdParamSchema.extend({
     sku: z.string().min(2).max(64).optional(),
     name: z.string().min(2).max(160).optional(),
     supplierName: z.string().max(120).optional(),
+    supplierId: uuid.nullable().optional(),
     supplierCost: money.optional(),
     basePrice: money.optional(),
     currentPrice: money.optional(),
@@ -88,6 +90,15 @@ const setStockSchema = z.object({
     locationId: uuid,
     quantity: z.coerce.number().int().min(0).max(1000000),
     receivedAt: z.coerce.date().optional(),
+  }),
+});
+
+const listInventorySchema = z.object({
+  query: z.object({
+    cursor: z.string().uuid().optional(),
+    limit: z.coerce.number().int().min(1).max(100).default(50),
+    productId: uuid.optional(),
+    locationId: uuid.optional(),
   }),
 });
 
@@ -146,6 +157,78 @@ const forecastSchema = z.object({
   }),
 });
 
+const createSupplierSchema = z.object({
+  body: z.object({
+    name: z.string().min(2).max(160),
+    email: z.string().email().optional(),
+    contactName: z.string().min(2).max(120).optional(),
+    phone: z.string().min(4).max(40).optional(),
+  }),
+});
+
+const listSuppliersSchema = z.object({
+  query: z.object({
+    cursor: z.string().uuid().optional(),
+    limit: z.coerce.number().int().min(1).max(50).default(20),
+    q: z.string().max(80).optional(),
+  }),
+});
+
+const supplierIdParamSchema = z.object({
+  params: z.object({
+    supplierId: uuid,
+  }),
+});
+
+const updateSupplierSchema = supplierIdParamSchema.extend({
+  body: z.object({
+    name: z.string().min(2).max(160).optional(),
+    email: z.string().email().nullable().optional(),
+    contactName: z.string().min(2).max(120).nullable().optional(),
+    phone: z.string().min(4).max(40).nullable().optional(),
+  }).refine((value) => Object.keys(value).length > 0, {
+    message: "At least one field must be provided",
+  }),
+});
+
+const purchaseOrderItemSchema = z.object({
+  productId: uuid,
+  quantity: z.coerce.number().int().positive().max(1000000),
+  unitCost: money.optional(),
+});
+
+const createPurchaseOrderSchema = z.object({
+  body: z.object({
+    supplierId: uuid,
+    expectedAt: z.coerce.date().optional(),
+    items: z.array(purchaseOrderItemSchema).min(1).max(100),
+  }),
+});
+
+const listPurchaseOrdersSchema = z.object({
+  query: z.object({
+    cursor: z.string().uuid().optional(),
+    limit: z.coerce.number().int().min(1).max(50).default(20),
+    status: z.enum(["DRAFT", "SENT", "RECEIVED", "CANCELLED"]).optional(),
+  }),
+});
+
+const purchaseOrderIdParamSchema = z.object({
+  params: z.object({
+    purchaseOrderId: uuid,
+  }),
+});
+
+const receivePurchaseOrderSchema = purchaseOrderIdParamSchema.extend({
+  body: z.object({
+    locationId: uuid,
+    receivedItems: z.array(z.object({
+      productId: uuid,
+      quantity: z.coerce.number().int().positive().max(1000000),
+    })).optional(),
+  }),
+});
+
 module.exports = {
   createLocationSchema,
   listLocationsSchema,
@@ -155,6 +238,7 @@ module.exports = {
   updateProductSchema,
   productIdParamSchema,
   listProductsSchema,
+  listInventorySchema,
   setStockSchema,
   transferSchema,
   decaySchema,
@@ -162,4 +246,12 @@ module.exports = {
   reservationTokenSchema,
   recordSaleSchema,
   forecastSchema,
+  createSupplierSchema,
+  listSuppliersSchema,
+  updateSupplierSchema,
+  supplierIdParamSchema,
+  createPurchaseOrderSchema,
+  listPurchaseOrdersSchema,
+  purchaseOrderIdParamSchema,
+  receivePurchaseOrderSchema,
 };

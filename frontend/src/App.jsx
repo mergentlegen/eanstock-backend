@@ -1,3 +1,4 @@
+import toast, { Toaster } from "react-hot-toast";
 import { useEffect, useState } from "react";
 
 const demoAdmin = { email: "admin@leanstock.local", password: "AdminPass1!" };
@@ -14,14 +15,34 @@ function marketName(email) {
 }
 
 function apiMessage(data, fallback) {
-  if (data?.error?.message) return data.error.message;
+  if (data?.error?.message) return friendlyApiMessage(data.error.message);
   if (data?.message) return data.message;
-  if (data?.user?.email) return `${data.user.email} updated`;
-  if (data?.location?.name) return `${data.location.name} created`;
-  if (data?.product?.name) return `${data.product.name} created`;
-  if (data?.transfer?.id) return "Inventory transfer completed";
-  if (data?.reservation?.token) return "Stock reservation created";
+  if (data?.user?.email) return `User ${data.user.email} updated successfully.`;
+  if (data?.location?.name) return `Store ${data.location.name} saved successfully.`;
+  if (data?.product?.name) return `Product ${data.product.name} saved successfully.`;
+  if (data?.supplier?.name) return `Supplier ${data.supplier.name} saved successfully.`;
+  if (data?.purchaseOrder?.id) return `Purchase order is now ${data.purchaseOrder.status}.`;
+  if (data?.inventoryItem?.id) return `Stock updated. On hand: ${data.inventoryItem.quantity}, reserved: ${data.inventoryItem.reservedQuantity}.`;
+  if (data?.transfer?.id) return `Transfer completed. ${data.transfer.quantity} item(s) moved successfully.`;
+  if (data?.reservation?.token) return `Stock reservation created: ${data.reservation.token}.`;
+  if (data?.updatedCount !== undefined) return `Dead-stock decay checked products. Updated prices: ${data.updatedCount}.`;
   return fallback;
+}
+
+function friendlyApiMessage(message) {
+  if (message.includes("Insufficient source inventory") || message.includes("Not enough stock")) {
+    return "Not enough stock in the source store for this operation.";
+  }
+  if (message.includes("Not enough available inventory")) {
+    return "Not enough available stock after existing reservations.";
+  }
+  if (message.includes("Unique constraint")) {
+    return "This value already exists. Use a different code, SKU, email, or supplier name.";
+  }
+  if (message.includes("Email verification is required")) {
+    return "Email verification is required before this action.";
+  }
+  return message;
 }
 
 export default function App() {
@@ -32,11 +53,6 @@ export default function App() {
   const [screen, setScreen] = useState("register");
   const [section, setSection] = useState("inventory");
   const [loading, setLoading] = useState(false);
-  const [notice, setNotice] = useState({
-    type: "info",
-    title: "Ready",
-    text: "Create an account, verify email, then manage inventory.",
-  });
 
   const [registerForm, setRegisterForm] = useState({ email: "", password: "" });
   const [verifyToken, setVerifyToken] = useState("");
@@ -46,10 +62,18 @@ export default function App() {
 
   const [locations, setLocations] = useState([]);
   const [products, setProducts] = useState([]);
+  const [suppliers, setSuppliers] = useState([]);
+  const [purchaseOrders, setPurchaseOrders] = useState([]);
+  const [inventoryItems, setInventoryItems] = useState([]);
   const [users, setUsers] = useState([]);
+  const [jobQueues, setJobQueues] = useState(null);
+  const [forecastResult, setForecastResult] = useState(null);
   const [reservationToken, setReservationToken] = useState("");
+  const [activeReservation, setActiveReservation] = useState(null);
+  const [decayResult, setDecayResult] = useState(null);
   const [editingLocationId, setEditingLocationId] = useState("");
   const [editingProductId, setEditingProductId] = useState("");
+  const [editingSupplierId, setEditingSupplierId] = useState("");
 
   const [locationForm, setLocationForm] = useState({
     name: "Main Store",
@@ -59,6 +83,7 @@ export default function App() {
   const [productForm, setProductForm] = useState({
     sku: "SKU-1001",
     name: "Winter Jacket",
+    supplierId: "",
     supplierName: "Almaty Textile",
     supplierCost: "9000",
     basePrice: "15000",
@@ -72,12 +97,45 @@ export default function App() {
     productId: "",
     locationId: "",
     quantity: "20",
+    receivedAt: "2026-03-01",
+  });
+  const [reservationForm, setReservationForm] = useState({
+    productId: "",
+    locationId: "",
+    quantity: "1",
+    ttlSeconds: "900",
   });
   const [transferForm, setTransferForm] = useState({
     productId: "",
     sourceLocationId: "",
     destinationLocationId: "",
     quantity: "5",
+  });
+  const [supplierForm, setSupplierForm] = useState({
+    name: "Almaty Textile",
+    email: "supplier@example.com",
+    contactName: "Supply Manager",
+    phone: "+77010000000",
+  });
+  const [purchaseOrderForm, setPurchaseOrderForm] = useState({
+    supplierId: "",
+    productId: "",
+    locationId: "",
+    quantity: "10",
+    unitCost: "9000",
+  });
+  const [saleForm, setSaleForm] = useState({
+    productId: "",
+    locationId: "",
+    quantity: "2",
+    unitPrice: "15000",
+  });
+  const [forecastForm, setForecastForm] = useState({
+    productId: "",
+    locationId: "",
+    days: "30",
+    leadTimeDays: "7",
+    safetyStock: "5",
   });
 
   const isLoggedIn = Boolean(auth.accessToken);
@@ -104,6 +162,7 @@ export default function App() {
   useEffect(() => {
     if (section === "admin" && isAdmin) {
       listUsers();
+      loadJobQueues();
     }
   }, [section, isAdmin]);
 
@@ -111,11 +170,19 @@ export default function App() {
     if (isLoggedIn && section === "inventory") {
       refreshLocations();
       refreshProducts();
+      refreshSuppliers();
+      refreshPurchaseOrders();
+      refreshInventory();
     }
   }, [isLoggedIn, section]);
 
   function notify(type, title, text) {
-    setNotice({ type, title, text });
+    const message = `${title}: ${text}`;
+    if (type === "error") {
+      toast.error(message);
+      return;
+    }
+    toast.success(message);
   }
 
   function saveAuth(nextAuth) {
@@ -187,7 +254,9 @@ export default function App() {
           throw error;
         }
       }
-      notify("success", successText, apiMessage(data, successText));
+      if (!options.silent) {
+        notify("success", successText, apiMessage(data, successText));
+      }
       return data;
     } catch (error) {
       if (error.status === 401 && options.auth) {
@@ -279,14 +348,29 @@ export default function App() {
     setScreen("login");
   }
 
-  async function refreshLocations() {
-    const data = await request("/locations?limit=50", { auth: true }, "Locations loaded");
+  async function refreshLocations({ silent = true } = {}) {
+    const data = await request("/locations?limit=50", { auth: true, silent }, "Stores refreshed");
     setLocations(data.data || []);
   }
 
-  async function refreshProducts() {
-    const data = await request("/products?limit=50", { auth: true }, "Products loaded");
+  async function refreshProducts({ silent = true } = {}) {
+    const data = await request("/products?limit=50", { auth: true, silent }, "Products refreshed");
     setProducts(data.data || []);
+  }
+
+  async function refreshSuppliers({ silent = true } = {}) {
+    const data = await request("/suppliers?limit=50", { auth: true, silent }, "Suppliers refreshed");
+    setSuppliers(data.data || []);
+  }
+
+  async function refreshPurchaseOrders({ silent = true } = {}) {
+    const data = await request("/purchase-orders?limit=50", { auth: true, silent }, "Purchase orders refreshed");
+    setPurchaseOrders(data.data || []);
+  }
+
+  async function refreshInventory({ silent = true } = {}) {
+    const data = await request("/inventory?limit=100", { auth: true, silent }, "Stock table refreshed");
+    setInventoryItems(data.data || []);
   }
 
   function editLocation(location) {
@@ -310,12 +394,16 @@ export default function App() {
       method: editingLocationId ? "PATCH" : "POST",
       auth: true,
       body: locationForm,
-    }, editingLocationId ? "Location updated" : "Location created");
+    }, editingLocationId ? "Store updated successfully" : "Store created successfully");
 
     await refreshLocations();
     if (!editingLocationId && locations.length === 0) {
       setStockForm((current) => ({ ...current, locationId: data.location.id }));
       setTransferForm((current) => ({ ...current, sourceLocationId: data.location.id }));
+      setPurchaseOrderForm((current) => ({ ...current, locationId: data.location.id }));
+      setReservationForm((current) => ({ ...current, locationId: data.location.id }));
+      setSaleForm((current) => ({ ...current, locationId: data.location.id }));
+      setForecastForm((current) => ({ ...current, locationId: data.location.id }));
     }
     if (!editingLocationId && locations.length === 1) {
       setTransferForm((current) => ({ ...current, destinationLocationId: data.location.id }));
@@ -327,6 +415,7 @@ export default function App() {
     if (!window.confirm("Delete this location?")) return;
     await request(`/locations/${locationId}`, { method: "DELETE", auth: true }, "Location deleted");
     await refreshLocations();
+    await refreshInventory();
   }
 
   function editProduct(product) {
@@ -334,6 +423,7 @@ export default function App() {
     setProductForm({
       sku: product.sku,
       name: product.name,
+      supplierId: product.supplierId || "",
       supplierName: product.supplierName || "",
       supplierCost: String(product.supplierCost),
       basePrice: String(product.basePrice),
@@ -350,6 +440,7 @@ export default function App() {
     setProductForm({
       sku: `SKU-${Date.now()}`,
       name: "Winter Jacket",
+      supplierId: "",
       supplierName: "Almaty Textile",
       supplierCost: "9000",
       basePrice: "15000",
@@ -369,6 +460,7 @@ export default function App() {
       auth: true,
       body: {
         ...productForm,
+        supplierId: productForm.supplierId || undefined,
         supplierCost: Number(productForm.supplierCost),
         basePrice: Number(productForm.basePrice),
         currentPrice: Number(productForm.currentPrice),
@@ -377,10 +469,18 @@ export default function App() {
         decayIntervalHours: Number(productForm.decayIntervalHours),
         minPricePercent: Number(productForm.minPricePercent),
       },
-    }, editingProductId ? "Product updated" : "Product created");
+    }, editingProductId ? "Product updated successfully" : "Product created successfully");
     await refreshProducts();
     setStockForm((current) => ({ ...current, productId: data.product.id }));
     setTransferForm((current) => ({ ...current, productId: data.product.id }));
+    setReservationForm((current) => ({ ...current, productId: data.product.id }));
+    setSaleForm((current) => ({ ...current, productId: data.product.id, unitPrice: String(data.product.currentPrice) }));
+    setForecastForm((current) => ({ ...current, productId: data.product.id }));
+    setPurchaseOrderForm((current) => ({
+      ...current,
+      productId: data.product.id,
+      unitCost: String(data.product.supplierCost),
+    }));
     resetProductForm();
   }
 
@@ -388,6 +488,91 @@ export default function App() {
     if (!window.confirm("Delete this product?")) return;
     await request(`/products/${productId}`, { method: "DELETE", auth: true }, "Product deleted");
     await refreshProducts();
+    await refreshInventory();
+  }
+
+  function editSupplier(supplier) {
+    setEditingSupplierId(supplier.id);
+    setSupplierForm({
+      name: supplier.name,
+      email: supplier.email || "",
+      contactName: supplier.contactName || "",
+      phone: supplier.phone || "",
+    });
+  }
+
+  function resetSupplierForm() {
+    setEditingSupplierId("");
+    setSupplierForm({
+      name: "Almaty Textile",
+      email: "supplier@example.com",
+      contactName: "Supply Manager",
+      phone: "+77010000000",
+    });
+  }
+
+  async function saveSupplier(event) {
+    event.preventDefault();
+    const path = editingSupplierId ? `/suppliers/${editingSupplierId}` : "/suppliers";
+    const body = {
+      name: supplierForm.name,
+      email: supplierForm.email || undefined,
+      contactName: supplierForm.contactName || undefined,
+      phone: supplierForm.phone || undefined,
+    };
+    const data = await request(path, {
+      method: editingSupplierId ? "PATCH" : "POST",
+      auth: true,
+      body,
+    }, editingSupplierId ? "Supplier updated successfully" : "Supplier created successfully");
+    await refreshSuppliers();
+    setProductForm((current) => ({ ...current, supplierId: data.supplier.id, supplierName: data.supplier.name }));
+    setPurchaseOrderForm((current) => ({ ...current, supplierId: data.supplier.id }));
+    resetSupplierForm();
+  }
+
+  async function deleteSupplier(supplierId) {
+    if (!window.confirm("Delete this supplier?")) return;
+    await request(`/suppliers/${supplierId}`, { method: "DELETE", auth: true }, "Supplier deleted");
+    await refreshSuppliers();
+  }
+
+  async function createPurchaseOrder(event) {
+    event.preventDefault();
+    const data = await request("/purchase-orders", {
+      method: "POST",
+      auth: true,
+      body: {
+        supplierId: purchaseOrderForm.supplierId,
+        items: [{
+          productId: purchaseOrderForm.productId,
+          quantity: Number(purchaseOrderForm.quantity),
+          unitCost: Number(purchaseOrderForm.unitCost),
+        }],
+      },
+    }, "Purchase order created successfully");
+    await refreshPurchaseOrders();
+    return data;
+  }
+
+  async function sendPurchaseOrder(purchaseOrderId) {
+    await request(`/purchase-orders/${purchaseOrderId}/send`, { method: "POST", auth: true }, "Purchase order sent");
+    await refreshPurchaseOrders();
+  }
+
+  async function receivePurchaseOrder(purchaseOrderId) {
+    await request(`/purchase-orders/${purchaseOrderId}/receive`, {
+      method: "POST",
+      auth: true,
+      body: { locationId: purchaseOrderForm.locationId },
+    }, "Purchase order received into inventory");
+    await refreshPurchaseOrders();
+    await refreshInventory();
+  }
+
+  async function cancelPurchaseOrder(purchaseOrderId) {
+    await request(`/purchase-orders/${purchaseOrderId}/cancel`, { method: "POST", auth: true }, "Purchase order cancelled");
+    await refreshPurchaseOrders();
   }
 
   async function setStock(event) {
@@ -399,8 +584,39 @@ export default function App() {
         productId: stockForm.productId,
         locationId: stockForm.locationId,
         quantity: Number(stockForm.quantity),
+        ...(stockForm.receivedAt ? { receivedAt: stockForm.receivedAt } : {}),
       },
-    }, "Stock updated");
+    }, "Stock replenished successfully");
+    await refreshInventory();
+  }
+
+  async function recordSale(event) {
+    event.preventDefault();
+    await request("/sales", {
+      method: "POST",
+      auth: true,
+      body: {
+        productId: saleForm.productId,
+        locationId: saleForm.locationId,
+        quantity: Number(saleForm.quantity),
+        unitPrice: Number(saleForm.unitPrice),
+      },
+    }, "Sale recorded successfully");
+    await refreshInventory();
+  }
+
+  async function runForecast(event) {
+    event.preventDefault();
+    const params = new URLSearchParams({
+      locationId: forecastForm.locationId,
+      days: forecastForm.days,
+      leadTimeDays: forecastForm.leadTimeDays,
+      safetyStock: forecastForm.safetyStock,
+    });
+    const data = await request(`/products/${forecastForm.productId}/forecast?${params.toString()}`, {
+      auth: true,
+    }, "Forecast generated successfully");
+    setForecastResult(data.forecast);
   }
 
   async function transferStock(event) {
@@ -414,26 +630,55 @@ export default function App() {
         destinationLocationId: transferForm.destinationLocationId,
         quantity: Number(transferForm.quantity),
       },
-    }, "Transfer completed");
+    }, "Transfer completed successfully");
+    await refreshInventory();
   }
 
-  async function reserveStock() {
+  async function reserveStock(event) {
+    event.preventDefault();
     const data = await request("/inventory/reservations", {
       method: "POST",
       auth: true,
       body: {
-        productId: transferForm.productId,
-        locationId: transferForm.destinationLocationId,
-        quantity: 1,
-        ttlSeconds: 900,
+        productId: reservationForm.productId,
+        locationId: reservationForm.locationId,
+        quantity: Number(reservationForm.quantity),
+        ttlSeconds: Number(reservationForm.ttlSeconds),
       },
     }, "Reservation created");
     setReservationToken(data.reservation.token);
+    setActiveReservation(data.reservation);
+    await refreshInventory();
   }
 
-  async function listUsers() {
-    const data = await request("/admin/users?limit=100", { auth: true }, "Users loaded");
+  async function commitReservation() {
+    const data = await request(`/inventory/reservations/${reservationToken}/commit`, {
+      method: "POST",
+      auth: true,
+    }, "Reservation committed");
+    setActiveReservation(data.reservation);
+    await refreshInventory();
+  }
+
+  async function runDeadStockDecay() {
+    const data = await request("/jobs/dead-stock-decay", {
+      method: "POST",
+      auth: true,
+      body: {},
+    }, "Dead-stock price decay");
+    setDecayResult(data);
+    await refreshProducts();
+    await refreshInventory();
+  }
+
+  async function listUsers({ silent = true } = {}) {
+    const data = await request("/admin/users?limit=100", { auth: true, silent }, "Users refreshed");
     setUsers(data.data || []);
+  }
+
+  async function loadJobQueues({ silent = true } = {}) {
+    const data = await request("/admin/jobs", { auth: true, silent }, "Queues refreshed");
+    setJobQueues(data);
   }
 
   async function changeRole(userId, role) {
@@ -461,6 +706,7 @@ export default function App() {
   if (!isLoggedIn) {
     return (
       <main className="landing">
+        <Toaster position="top-right" toastOptions={{ duration: 2000 }} />
         <section className="hero">
           <div className="brand"><span>LS</span> LeanStock</div>
           <h1>Inventory platform for small retail teams</h1>
@@ -515,8 +761,6 @@ export default function App() {
               <button className="secondary" type="button" disabled={loading || !resetForm.token} onClick={confirmReset}>Change password</button>
             </form>
           )}
-
-          <Notice notice={notice} />
         </section>
       </main>
     );
@@ -524,6 +768,7 @@ export default function App() {
 
   return (
     <main className="platform">
+      <Toaster position="top-right" toastOptions={{ duration: 2000 }} />
       <aside className="sidebar">
         <div className="brand compact"><span>LS</span> LeanStock</div>
         <button className={section === "inventory" ? "active" : ""} type="button" onClick={() => setSection("inventory")}>Inventory</button>
@@ -547,9 +792,6 @@ export default function App() {
             <button type="button" onClick={logout} disabled={loading}>Logout</button>
           </div>
         </header>
-
-        <Notice notice={notice} />
-
         {section === "inventory" && (
           <div className="dashboardGrid">
             <form className="card" onSubmit={saveLocation}>
@@ -566,9 +808,10 @@ export default function App() {
             <form className="card" onSubmit={saveProduct}>
               <h2>{editingProductId ? "Edit product" : "Create product"}</h2>
               <div className="twoCols">
-                <label>SKU<input value={productForm.sku} onChange={(event) => setProductForm({ ...productForm, sku: event.target.value })} /></label>
+                <label>Product SKU<input value={productForm.sku} onChange={(event) => setProductForm({ ...productForm, sku: event.target.value })} /></label>
                 <label>Name<input value={productForm.name} onChange={(event) => setProductForm({ ...productForm, name: event.target.value })} /></label>
-                <label>Supplier<input value={productForm.supplierName} onChange={(event) => setProductForm({ ...productForm, supplierName: event.target.value })} /></label>
+                <Select label="Linked supplier" value={productForm.supplierId} options={suppliers} onChange={(value) => setProductForm({ ...productForm, supplierId: value })} />
+                <label>Supplier name on product<input value={productForm.supplierName} onChange={(event) => setProductForm({ ...productForm, supplierName: event.target.value })} /></label>
                 <label>Supplier cost<input type="number" value={productForm.supplierCost} onChange={(event) => setProductForm({ ...productForm, supplierCost: event.target.value })} /></label>
                 <label>Base price<input type="number" value={productForm.basePrice} onChange={(event) => setProductForm({ ...productForm, basePrice: event.target.value })} /></label>
                 <label>Current price<input type="number" value={productForm.currentPrice} onChange={(event) => setProductForm({ ...productForm, currentPrice: event.target.value })} /></label>
@@ -579,11 +822,38 @@ export default function App() {
               </div>
             </form>
 
+            <form className="card" onSubmit={saveSupplier}>
+              <h2>{editingSupplierId ? "Edit supplier" : "Create supplier"}</h2>
+              <div className="twoCols">
+                <label>Name<input value={supplierForm.name} onChange={(event) => setSupplierForm({ ...supplierForm, name: event.target.value })} /></label>
+                <label>Email<input type="email" value={supplierForm.email} onChange={(event) => setSupplierForm({ ...supplierForm, email: event.target.value })} /></label>
+                <label>Contact<input value={supplierForm.contactName} onChange={(event) => setSupplierForm({ ...supplierForm, contactName: event.target.value })} /></label>
+                <label>Phone<input value={supplierForm.phone} onChange={(event) => setSupplierForm({ ...supplierForm, phone: event.target.value })} /></label>
+              </div>
+              <div className="inlineActions">
+                <button type="submit" disabled={loading || !canManageInventory}>{editingSupplierId ? "Save supplier" : "Create supplier"}</button>
+                {editingSupplierId && <button className="secondary" type="button" onClick={resetSupplierForm}>Cancel edit</button>}
+              </div>
+            </form>
+
+            <form className="card" onSubmit={createPurchaseOrder}>
+              <h2>Purchase order</h2>
+              <Select label="Supplier" value={purchaseOrderForm.supplierId} options={suppliers} onChange={(value) => setPurchaseOrderForm({ ...purchaseOrderForm, supplierId: value })} />
+              <Select label="Product" value={purchaseOrderForm.productId} options={products} onChange={(value) => setPurchaseOrderForm({ ...purchaseOrderForm, productId: value })} />
+              <Select label="Receiving location" value={purchaseOrderForm.locationId} options={locations} onChange={(value) => setPurchaseOrderForm({ ...purchaseOrderForm, locationId: value })} />
+              <div className="twoCols">
+                <label>Quantity<input type="number" min="1" value={purchaseOrderForm.quantity} onChange={(event) => setPurchaseOrderForm({ ...purchaseOrderForm, quantity: event.target.value })} /></label>
+                <label>Unit cost<input type="number" min="1" value={purchaseOrderForm.unitCost} onChange={(event) => setPurchaseOrderForm({ ...purchaseOrderForm, unitCost: event.target.value })} /></label>
+              </div>
+              <button type="submit" disabled={loading || !purchaseOrderForm.supplierId || !purchaseOrderForm.productId}>Create PO</button>
+            </form>
+
             <form className="card" onSubmit={setStock}>
               <h2>Add stock</h2>
               <Select label="Product" value={stockForm.productId} options={products} onChange={(value) => setStockForm({ ...stockForm, productId: value })} />
               <Select label="Location" value={stockForm.locationId} options={locations} onChange={(value) => setStockForm({ ...stockForm, locationId: value })} />
               <label>Quantity<input type="number" min="0" value={stockForm.quantity} onChange={(event) => setStockForm({ ...stockForm, quantity: event.target.value })} /></label>
+              <label>Received date for decay demo<input type="date" value={stockForm.receivedAt} onChange={(event) => setStockForm({ ...stockForm, receivedAt: event.target.value })} /></label>
               <button type="submit" disabled={loading || !stockForm.productId || !stockForm.locationId}>Save stock</button>
             </form>
 
@@ -596,19 +866,79 @@ export default function App() {
               <button type="submit" disabled={loading || !transferForm.productId || !transferForm.sourceLocationId || !transferForm.destinationLocationId}>Transfer</button>
             </form>
 
+            <form className="card" onSubmit={recordSale}>
+              <h2>Record sale</h2>
+              <Select label="Product" value={saleForm.productId} options={products} onChange={(value) => setSaleForm({ ...saleForm, productId: value })} />
+              <Select label="Location" value={saleForm.locationId} options={locations} onChange={(value) => setSaleForm({ ...saleForm, locationId: value })} />
+              <div className="twoCols">
+                <label>Quantity<input type="number" min="1" value={saleForm.quantity} onChange={(event) => setSaleForm({ ...saleForm, quantity: event.target.value })} /></label>
+                <label>Unit price<input type="number" min="1" value={saleForm.unitPrice} onChange={(event) => setSaleForm({ ...saleForm, unitPrice: event.target.value })} /></label>
+              </div>
+              <button type="submit" disabled={loading || !saleForm.productId || !saleForm.locationId}>Record sale</button>
+            </form>
+
+            <form className="card" onSubmit={runForecast}>
+              <h2>Forecast reorder</h2>
+              <Select label="Product" value={forecastForm.productId} options={products} onChange={(value) => setForecastForm({ ...forecastForm, productId: value })} />
+              <Select label="Location" value={forecastForm.locationId} options={locations} onChange={(value) => setForecastForm({ ...forecastForm, locationId: value })} />
+              <div className="threeCols">
+                <label>Days<input type="number" min="1" value={forecastForm.days} onChange={(event) => setForecastForm({ ...forecastForm, days: event.target.value })} /></label>
+                <label>Lead time<input type="number" min="1" value={forecastForm.leadTimeDays} onChange={(event) => setForecastForm({ ...forecastForm, leadTimeDays: event.target.value })} /></label>
+                <label>Safety stock<input type="number" min="0" value={forecastForm.safetyStock} onChange={(event) => setForecastForm({ ...forecastForm, safetyStock: event.target.value })} /></label>
+              </div>
+              <button type="submit" disabled={loading || !forecastForm.productId || !forecastForm.locationId}>Run forecast</button>
+              {forecastResult && <ForecastResult forecast={forecastResult} />}
+            </form>
+
+            <form className="card" onSubmit={reserveStock}>
+              <h2>Reserve checkout stock</h2>
+              <Select label="Product" value={reservationForm.productId} options={products} onChange={(value) => setReservationForm({ ...reservationForm, productId: value })} />
+              <Select label="Location" value={reservationForm.locationId} options={locations} onChange={(value) => setReservationForm({ ...reservationForm, locationId: value })} />
+              <div className="twoCols">
+                <label>Quantity<input type="number" min="1" value={reservationForm.quantity} onChange={(event) => setReservationForm({ ...reservationForm, quantity: event.target.value })} /></label>
+                <label>TTL seconds<input type="number" min="60" value={reservationForm.ttlSeconds} onChange={(event) => setReservationForm({ ...reservationForm, ttlSeconds: event.target.value })} /></label>
+              </div>
+              <div className="inlineActions">
+                <button type="submit" disabled={loading || !reservationForm.productId || !reservationForm.locationId}>Create reservation</button>
+                <button className="secondary" type="button" disabled={loading || !reservationToken} onClick={commitReservation}>Commit reservation</button>
+              </div>
+              {activeReservation && <ReservationResult reservation={activeReservation} />}
+            </form>
+
             <div className="card">
               <h2>Quick operations</h2>
-              <button className="secondary" type="button" disabled={loading} onClick={refreshLocations}>Refresh locations</button>
-              <button className="secondary" type="button" disabled={loading} onClick={refreshProducts}>Refresh products</button>
-              <button type="button" disabled={loading || !transferForm.productId || !transferForm.destinationLocationId} onClick={reserveStock}>Reserve one item</button>
-              <button className="secondary" type="button" disabled={loading || !reservationToken} onClick={() => request(`/inventory/reservations/${reservationToken}/commit`, { method: "POST", auth: true }, "Reservation committed")}>Commit reservation</button>
-              <button className="secondary" type="button" disabled={loading} onClick={() => request("/jobs/dead-stock-decay", { method: "POST", auth: true, body: {} }, "Dead stock job executed")}>Run dead-stock decay</button>
+              <button className="secondary" type="button" disabled={loading} onClick={() => refreshLocations({ silent: false })}>Refresh locations</button>
+              <button className="secondary" type="button" disabled={loading} onClick={() => refreshProducts({ silent: false })}>Refresh products</button>
+              <button className="secondary" type="button" disabled={loading} onClick={() => refreshSuppliers({ silent: false })}>Refresh suppliers</button>
+              <button className="secondary" type="button" disabled={loading} onClick={() => refreshPurchaseOrders({ silent: false })}>Refresh POs</button>
+              <button className="secondary" type="button" disabled={loading} onClick={() => refreshInventory({ silent: false })}>Refresh stock table</button>
+              <button className="secondary" type="button" disabled={loading} onClick={runDeadStockDecay}>Run dead-stock price decay</button>
+              {decayResult && <DecayResult result={decayResult} />}
+            </div>
+
+            <div className="card stockBoard">
+              <div className="cardHeader">
+                <div>
+                  <h2>Stock by location</h2>
+                  <p>Use this table to verify stock after replenishment, transfer, reservation, PO receiving, and sales.</p>
+                </div>
+                <button className="secondary" type="button" disabled={loading} onClick={() => refreshInventory({ silent: false })}>Refresh</button>
+              </div>
+              <InventoryTable items={inventoryItems} />
             </div>
 
             <div className="card listCard">
               <h2>Current session data</h2>
               <DataList title="Locations" items={locations} onEdit={editLocation} onDelete={deleteLocation} />
-              <DataList title="Products" items={products} onEdit={editProduct} onDelete={deleteProduct} />
+              <ProductList items={products} onEdit={editProduct} onDelete={deleteProduct} />
+              <DataList title="Suppliers" items={suppliers} onEdit={editSupplier} onDelete={deleteSupplier} />
+              <PurchaseOrderList
+                items={purchaseOrders}
+                canReceive={Boolean(purchaseOrderForm.locationId)}
+                onSend={sendPurchaseOrder}
+                onReceive={receivePurchaseOrder}
+                onCancel={cancelPurchaseOrder}
+              />
               {reservationToken && <p className="muted">Reservation: {reservationToken}</p>}
             </div>
           </div>
@@ -619,16 +949,19 @@ export default function App() {
             <div className="cardHeader">
               <div>
                 <h2>User management</h2>
-                <p>Admin can see registered users and change their role.</p>
+                <p>Admin can see users, change roles, and inspect background queues.</p>
               </div>
-              <button type="button" onClick={listUsers} disabled={loading}>Refresh users</button>
+              <div className="inlineActions">
+                <button type="button" onClick={() => listUsers({ silent: false })} disabled={loading}>Refresh users</button>
+                <button className="secondary" type="button" onClick={() => loadJobQueues({ silent: false })} disabled={loading}>Refresh queues</button>
+              </div>
             </div>
             <div className="table">
               {users.map((user) => (
                 <div className="tableRow" key={user.id}>
                   <div>
                     <strong>{user.email}</strong>
-                    <span>{user.tenant?.name || "No tenant"} · {user.emailVerifiedAt ? "verified" : "not verified"}</span>
+                    <span>{user.tenant?.name || "No tenant"} - {user.emailVerifiedAt ? "verified" : "not verified"}</span>
                   </div>
                   <select value={user.role} onChange={(event) => changeRole(user.id, event.target.value)} disabled={loading}>
                     <option value="ADMIN">ADMIN</option>
@@ -639,6 +972,7 @@ export default function App() {
                 </div>
               ))}
             </div>
+            {jobQueues && <QueueSummary queues={jobQueues} />}
           </div>
         )}
 
@@ -663,11 +997,95 @@ export default function App() {
   );
 }
 
-function Notice({ notice }) {
+function InventoryTable({ items }) {
+  if (items.length === 0) {
+    return <p className="muted">No stock rows yet. Create a product and store, then replenish stock.</p>;
+  }
+
   return (
-    <div className={`notice ${notice.type}`}>
-      <strong>{notice.title}</strong>
-      <span>{notice.text}</span>
+    <div className="stockTable">
+      <div className="stockHeader">
+        <span>Product</span>
+        <span>Store</span>
+        <span>On hand</span>
+        <span>Reserved</span>
+        <span>Available</span>
+      </div>
+      {items.map((item) => {
+        const available = item.quantity - item.reservedQuantity;
+        return (
+          <div className="stockRow" key={item.id}>
+            <span>
+              <strong>{item.product?.name || item.productId}</strong>
+              <small>{item.product?.sku}</small>
+            </span>
+            <span>
+              <strong>{item.location?.name || item.locationId}</strong>
+              <small>{item.location?.code}</small>
+            </span>
+            <b>{item.quantity}</b>
+            <b>{item.reservedQuantity}</b>
+            <b className={available <= 0 ? "dangerText" : ""}>{available}</b>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function ForecastResult({ forecast }) {
+  return (
+    <div className="resultBox">
+      <strong>{forecast.shouldReorder ? "Reorder recommended" : "Stock is enough"}</strong>
+      <span>Available: {forecast.availableQuantity}</span>
+      <span>Reorder point: {forecast.reorderPoint}</span>
+      <span>Recommended order: {forecast.recommendedOrderQuantity}</span>
+      <span>Average daily demand: {forecast.averageDailyDemand}</span>
+    </div>
+  );
+}
+
+function ReservationResult({ reservation }) {
+  return (
+    <div className="resultBox">
+      <strong>Reservation status: {reservation.status}</strong>
+      <span>Token: {reservation.token}</span>
+      <span>Quantity reserved: {reservation.quantity}</span>
+      <span>Expires at: {new Date(reservation.expiresAt).toLocaleString()}</span>
+    </div>
+  );
+}
+
+function DecayResult({ result }) {
+  return (
+    <div className="resultBox">
+      <strong>Dead-stock decay result</strong>
+      <span>Updated products: {result.updatedCount}</span>
+      {result.products?.length > 0 && (
+        <span>{result.products.map((product) => `${product.name}: ${product.currentPrice}`).join(", ")}</span>
+      )}
+      {result.updatedCount === 0 && <span>No product met the age/interval rules. Use an older received date and run again.</span>}
+    </div>
+  );
+}
+
+function QueueSummary({ queues }) {
+  return (
+    <div className="queueGrid">
+      {["email", "maintenance"].map((name) => {
+        const queue = queues[name];
+        return (
+          <section key={name}>
+            <h3>{name} queue</h3>
+            <div className="metricRow">
+              <span>Waiting <b>{queue?.counts?.waiting || 0}</b></span>
+              <span>Active <b>{queue?.counts?.active || 0}</b></span>
+              <span>Completed <b>{queue?.counts?.completed || 0}</b></span>
+              <span>Failed <b>{queue?.counts?.failed || 0}</b></span>
+            </div>
+          </section>
+        );
+      })}
     </div>
   );
 }
@@ -700,6 +1118,49 @@ function DataList({ title, items, onEdit, onDelete }) {
           <nav>
             <button className="secondary" type="button" onClick={() => onEdit(item)}>Edit</button>
             <button className="danger" type="button" onClick={() => onDelete(item.id)}>Delete</button>
+          </nav>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function ProductList({ items, onEdit, onDelete }) {
+  return (
+    <div className="dataList">
+      <h3>Products</h3>
+      {items.length === 0 && <p className="muted">Nothing created yet.</p>}
+      {items.map((item) => (
+        <div key={item.id}>
+          <section>
+            <strong>{item.name}</strong>
+            <span>SKU {item.sku} - price {item.currentPrice} - decay {item.decayPercent}%</span>
+          </section>
+          <nav>
+            <button className="secondary" type="button" onClick={() => onEdit(item)}>Edit</button>
+            <button className="danger" type="button" onClick={() => onDelete(item.id)}>Delete</button>
+          </nav>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function PurchaseOrderList({ items, canReceive, onSend, onReceive, onCancel }) {
+  return (
+    <div className="dataList">
+      <h3>Purchase orders</h3>
+      {items.length === 0 && <p className="muted">Nothing created yet.</p>}
+      {items.map((item) => (
+        <div key={item.id}>
+          <section>
+            <strong>{item.supplier?.name || item.supplierId}</strong>
+            <span>{item.status} - {item.items?.length || 0} item(s)</span>
+          </section>
+          <nav>
+            <button className="secondary" type="button" disabled={item.status !== "DRAFT"} onClick={() => onSend(item.id)}>Send</button>
+            <button className="secondary" type="button" disabled={!canReceive || !["DRAFT", "SENT"].includes(item.status)} onClick={() => onReceive(item.id)}>Receive</button>
+            <button className="danger" type="button" disabled={["RECEIVED", "CANCELLED"].includes(item.status)} onClick={() => onCancel(item.id)}>Cancel</button>
           </nav>
         </div>
       ))}

@@ -55,7 +55,7 @@ async function updateUserRole(req, res) {
     });
 
     if (!target) {
-      throw notFound("User was not found in your tenant");
+      throw notFound("User was not found");
     }
 
     const updated = await tx.user.update({
@@ -101,7 +101,7 @@ async function deleteUser(req, res) {
   }
 
   const result = await prisma.$transaction(async (tx) => {
-    const target = await tx.user.findUnique({
+    const target = await tx.user.findFirst({
       where: { id: userId },
     });
     if (!target) {

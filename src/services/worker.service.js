@@ -1,7 +1,7 @@
 const { Worker } = require("bullmq");
 const { createQueueConnection } = require("../config/queues");
 const { sendEmailNow } = require("./email.service");
-const { applyDeadStockDecayForTenant } = require("./inventory.service");
+const { applyDeadStockDecayForTenant, releaseExpiredReservationsForTenant } = require("./inventory.service");
 
 const workers = [];
 
@@ -34,6 +34,12 @@ function startWorkers() {
       return applyDeadStockDecayForTenant({
         tenantId: job.data.tenantId,
         actorUserId: null,
+        now: job.data.now ? new Date(job.data.now) : new Date(),
+      });
+    }
+    if (job.name === "release-expired-reservations") {
+      return releaseExpiredReservationsForTenant({
+        tenantId: job.data.tenantId,
         now: job.data.now ? new Date(job.data.now) : new Date(),
       });
     }

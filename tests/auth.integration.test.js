@@ -12,8 +12,11 @@ beforeEach(async () => {
   await prisma.inventoryTransfer.deleteMany();
   await prisma.inventoryReservation.deleteMany();
   await prisma.salesRecord.deleteMany();
+  await prisma.purchaseOrderItem.deleteMany();
+  await prisma.purchaseOrder.deleteMany();
   await prisma.inventoryItem.deleteMany();
   await prisma.product.deleteMany();
+  await prisma.supplier.deleteMany();
   await prisma.location.deleteMany();
   await prisma.user.deleteMany();
   await prisma.tenant.deleteMany();
@@ -132,6 +135,22 @@ describe("authentication and RBAC", () => {
         emailVerifiedAt: new Date(),
       },
     });
+    const merchantTenant = await prisma.tenant.create({
+      data: {
+        name: "Merchant Tenant",
+        slug: "merchant-tenant-test",
+      },
+    });
+    const merchant = await prisma.user.create({
+      data: {
+        tenantId: merchantTenant.id,
+        email: "merchant-cross-tenant@example.com",
+        username: "merchant_cross_tenant",
+        passwordHash,
+        role: "MERCHANT",
+        emailVerifiedAt: new Date(),
+      },
+    });
 
     const login = await request(app)
       .post("/auth/login")
@@ -143,15 +162,19 @@ describe("authentication and RBAC", () => {
       .set("Authorization", `Bearer ${login.body.accessToken}`)
       .expect(200);
 
-    expect(listed.body.data).toHaveLength(2);
+    expect(listed.body.data.map((user) => user.email)).toEqual(expect.arrayContaining([
+      admin.email,
+      staff.email,
+      merchant.email,
+    ]));
 
     await request(app)
-      .patch(`/admin/users/${staff.id}/role`)
+      .patch(`/admin/users/${merchant.id}/role`)
       .set("Authorization", `Bearer ${login.body.accessToken}`)
       .send({ role: "ADMIN" })
       .expect(200);
 
-    const updated = await prisma.user.findUnique({ where: { id: staff.id } });
+    const updated = await prisma.user.findUnique({ where: { id: merchant.id } });
     expect(updated.role).toBe("ADMIN");
   });
 });

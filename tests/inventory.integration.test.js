@@ -11,8 +11,11 @@ beforeEach(async () => {
   await prisma.inventoryTransfer.deleteMany();
   await prisma.inventoryReservation.deleteMany();
   await prisma.salesRecord.deleteMany();
+  await prisma.purchaseOrderItem.deleteMany();
+  await prisma.purchaseOrder.deleteMany();
   await prisma.inventoryItem.deleteMany();
   await prisma.product.deleteMany();
+  await prisma.supplier.deleteMany();
   await prisma.location.deleteMany();
   await prisma.user.deleteMany();
   await prisma.tenant.deleteMany();
@@ -111,5 +114,86 @@ describe("LeanStock inventory transaction", () => {
 
     expect(sourceStock.quantity).toBe(3);
     expect(destinationStock.quantity).toBe(7);
+  });
+
+  test("creates, sends, and receives a purchase order into inventory", async () => {
+    await request(app)
+      .post("/auth/register")
+      .send({
+        tenantName: "PO Mart",
+        email: "po-owner@example.com",
+        username: "po_owner_user",
+        password: "StrongPass1!",
+      })
+      .expect(201);
+
+    const user = await prisma.user.findUnique({ where: { email: "po-owner@example.com" } });
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { emailVerifiedAt: new Date() },
+    });
+    const login = await request(app)
+      .post("/auth/login")
+      .send({ email: "po-owner@example.com", password: "StrongPass1!" })
+      .expect(200);
+    const token = login.body.accessToken;
+
+    const location = await request(app)
+      .post("/locations")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ name: "Receiving Dock", code: "DOCK" })
+      .expect(201);
+
+    const supplier = await request(app)
+      .post("/suppliers")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ name: "Astana Supply", email: "supplier@example.com" })
+      .expect(201);
+
+    const product = await request(app)
+      .post("/products")
+      .set("Authorization", `Bearer ${token}`)
+      .send({
+        sku: "RICE-1KG",
+        name: "Rice 1kg",
+        supplierId: supplier.body.supplier.id,
+        supplierCost: 400,
+        basePrice: 700,
+      })
+      .expect(201);
+
+    const created = await request(app)
+      .post("/purchase-orders")
+      .set("Authorization", `Bearer ${token}`)
+      .send({
+        supplierId: supplier.body.supplier.id,
+        items: [{ productId: product.body.product.id, quantity: 12, unitCost: 390 }],
+      })
+      .expect(201);
+
+    await request(app)
+      .post(`/purchase-orders/${created.body.purchaseOrder.id}/send`)
+      .set("Authorization", `Bearer ${token}`)
+      .expect(200);
+
+    await request(app)
+      .post(`/purchase-orders/${created.body.purchaseOrder.id}/receive`)
+      .set("Authorization", `Bearer ${token}`)
+      .send({ locationId: location.body.location.id })
+      .expect(200);
+
+    const stock = await prisma.inventoryItem.findFirst({
+      where: {
+        tenantId: user.tenantId,
+        productId: product.body.product.id,
+        locationId: location.body.location.id,
+      },
+    });
+    expect(stock.quantity).toBe(12);
+
+    const purchaseOrder = await prisma.purchaseOrder.findUnique({
+      where: { id: created.body.purchaseOrder.id },
+    });
+    expect(purchaseOrder.status).toBe("RECEIVED");
   });
 });

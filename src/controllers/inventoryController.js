@@ -7,6 +7,17 @@ const {
   updateProduct,
   deleteProduct,
   listProducts,
+  createSupplier,
+  listSuppliers,
+  updateSupplier,
+  deleteSupplier,
+  createPurchaseOrder,
+  listPurchaseOrders,
+  getPurchaseOrder,
+  sendPurchaseOrder,
+  receivePurchaseOrder,
+  cancelPurchaseOrder,
+  listInventory,
   setInventoryStock,
   transferInventory,
   reserveInventory,
@@ -54,6 +65,61 @@ async function deleteProductHandler(req, res) {
 
 async function listProductsHandler(req, res) {
   const result = await listProducts(req.user, req.query);
+  res.json(result);
+}
+
+async function createSupplierHandler(req, res) {
+  const supplier = await createSupplier(req.user, req.body);
+  res.status(201).json({ supplier });
+}
+
+async function listSuppliersHandler(req, res) {
+  const result = await listSuppliers(req.user, req.query);
+  res.json(result);
+}
+
+async function updateSupplierHandler(req, res) {
+  const supplier = await updateSupplier(req.user, req.params.supplierId, req.body);
+  res.json({ supplier });
+}
+
+async function deleteSupplierHandler(req, res) {
+  const result = await deleteSupplier(req.user, req.params.supplierId);
+  res.json(result);
+}
+
+async function createPurchaseOrderHandler(req, res) {
+  const purchaseOrder = await createPurchaseOrder(req.user, req.body);
+  res.status(201).json({ purchaseOrder });
+}
+
+async function listPurchaseOrdersHandler(req, res) {
+  const result = await listPurchaseOrders(req.user, req.query);
+  res.json(result);
+}
+
+async function getPurchaseOrderHandler(req, res) {
+  const purchaseOrder = await getPurchaseOrder(req.user, req.params.purchaseOrderId);
+  res.json({ purchaseOrder });
+}
+
+async function sendPurchaseOrderHandler(req, res) {
+  const purchaseOrder = await sendPurchaseOrder(req.user, req.params.purchaseOrderId);
+  res.json({ purchaseOrder });
+}
+
+async function receivePurchaseOrderHandler(req, res) {
+  const purchaseOrder = await receivePurchaseOrder(req.user, req.params.purchaseOrderId, req.body);
+  res.json({ purchaseOrder });
+}
+
+async function cancelPurchaseOrderHandler(req, res) {
+  const purchaseOrder = await cancelPurchaseOrder(req.user, req.params.purchaseOrderId);
+  res.json({ purchaseOrder });
+}
+
+async function listInventoryHandler(req, res) {
+  const result = await listInventory(req.user, req.query);
   res.json(result);
 }
 
@@ -109,6 +175,17 @@ module.exports = {
   updateProductHandler,
   deleteProductHandler,
   listProductsHandler,
+  createSupplierHandler,
+  listSuppliersHandler,
+  updateSupplierHandler,
+  deleteSupplierHandler,
+  createPurchaseOrderHandler,
+  listPurchaseOrdersHandler,
+  getPurchaseOrderHandler,
+  sendPurchaseOrderHandler,
+  receivePurchaseOrderHandler,
+  cancelPurchaseOrderHandler,
+  listInventoryHandler,
   setStockHandler,
   transferHandler,
   reserveHandler,

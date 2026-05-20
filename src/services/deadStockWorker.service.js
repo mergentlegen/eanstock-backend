@@ -25,6 +25,18 @@ function startDeadStockWorker() {
         removeOnComplete: 100,
         removeOnFail: 100,
       });
+      await maintenanceQueue.add("release-expired-reservations", {
+        tenantId: tenant.id,
+        now: new Date().toISOString(),
+      }, {
+        attempts: 3,
+        backoff: {
+          type: "exponential",
+          delay: 10000,
+        },
+        removeOnComplete: 100,
+        removeOnFail: 100,
+      });
     }
   });
 

@@ -17,4 +17,4 @@ COPY . .
 RUN npm run build:client
 RUN npx prisma generate
 EXPOSE 3000
-CMD ["sh", "-c", "npx prisma migrate deploy && node src/server.js"]
+CMD ["sh", "-c", "npx prisma migrate deploy && if [ \"$SEED_DEMO_USERS\" = \"true\" ]; then node prisma/seed.js; fi && node src/server.js"]

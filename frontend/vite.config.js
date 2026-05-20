@@ -17,6 +17,8 @@ module.exports = defineConfig({
       "/health": "http://localhost:3000",
       "/locations": "http://localhost:3000",
       "/products": "http://localhost:3000",
+      "/suppliers": "http://localhost:3000",
+      "/purchase-orders": "http://localhost:3000",
       "/inventory": "http://localhost:3000",
       "/sales": "http://localhost:3000",
       "/jobs": "http://localhost:3000",
